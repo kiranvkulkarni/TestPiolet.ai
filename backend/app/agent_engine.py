@@ -33,19 +33,25 @@ Valid status values: pending, in_progress, blocked, completed, cancelled.
 Valid priority values: critical, high, medium, low.
 
 Workflow discipline — always follow it:
-1. Before assigning work, call get_workload_summary and prefer less-loaded testers.
+1. Before assigning work, call get_workload_summary (or find_underloaded_testers) and \
+prefer less-loaded testers.
 2. Before creating a task, fetch a valid test_request_id with get_test_requests (or \
 get_projects first). Never invent IDs.
 3. When the user names a device, resolve it to a device_model_id with get_device_models.
 4. When dates are given for an assignee, call check_leave_conflicts and warn about \
 overlaps before proceeding.
-5. Before creating 5 or more tasks at once, summarize what you will create and ask the \
-user to confirm.
-6. When a task is marked completed, offer to record actual_hours.
-7. If a request is ambiguous, ask ONE clarifying question instead of guessing.
+5. Bulk actions (5+ tasks): the write tools return needs_confirmation with a plan \
+instead of committing. Present that plan clearly and ask the user to confirm. Only \
+after the user explicitly says yes, call the same tool again with confirm=true. Never \
+set confirm=true on your own.
+6. To reschedule or rebalance work, prefer the purpose-built tools (reschedule_tasks, \
+assign_bulk, set_dependency, remove_dependency) over many update_task calls — they \
+respect working calendars and return an explanation.
+7. When a task is marked completed, offer to record actual_hours.
+8. If a request is ambiguous, ask ONE clarifying question instead of guessing.
 
-Be concise. After acting, state plainly what you did (IDs, names, dates). Dates are \
-YYYY-MM-DD."""
+Write tools return a rationale and confidence — repeat the key facts from the rationale \
+in your reply so the user knows what changed and why. Be concise. Dates are YYYY-MM-DD."""
 
 
 TOOLS = [
@@ -225,6 +231,105 @@ TOOLS = [
     },
 ]
 
+TOOLS += [
+    {
+        "type": "function",
+        "function": {
+            "name": "reschedule_tasks",
+            "description": "Move one or more tasks to a new start date. Respects weekends and each assignee's approved leave, and pushes dependent tasks forward if needed. For 5+ tasks it returns a plan needing user confirmation.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_ids": {"type": "array", "items": {"type": "integer"}},
+                    "start_date": {"type": "string", "description": "New start date, YYYY-MM-DD"},
+                    "confirm": {
+                        "type": "boolean",
+                        "description": "Set true ONLY after the user explicitly confirmed the proposed plan",
+                    },
+                },
+                "required": ["task_ids", "start_date"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_dependency",
+            "description": "Create a finish-to-start dependency: from_task must finish before to_task starts. Rejects cycles and duplicates; pushes the successor if its dates violate the new link.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "from_task_id": {"type": "integer", "description": "The predecessor (finishes first)"},
+                    "to_task_id": {"type": "integer", "description": "The successor (waits for the predecessor)"},
+                },
+                "required": ["from_task_id", "to_task_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "remove_dependency",
+            "description": "Remove the finish-to-start dependency between two tasks. Never changes dates.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "from_task_id": {"type": "integer"},
+                    "to_task_id": {"type": "integer"},
+                },
+                "required": ["from_task_id", "to_task_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "assign_bulk",
+            "description": "Assign or reassign a set of tasks across active testers, balancing by estimated hours (largest task to least-loaded tester) and avoiding approved leave. Use exclude_user_ids to move work OFF someone. For 5+ tasks it returns a plan needing user confirmation.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task_ids": {"type": "array", "items": {"type": "integer"}},
+                    "exclude_user_ids": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "Tester ids who must NOT receive these tasks",
+                    },
+                    "confirm": {
+                        "type": "boolean",
+                        "description": "Set true ONLY after the user explicitly confirmed the proposed plan",
+                    },
+                },
+                "required": ["task_ids"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_critical_path",
+            "description": "The ordered chain of zero-slack tasks that determines the project end date, plus the computed end date. Optionally scoped to one project.",
+            "parameters": {
+                "type": "object",
+                "properties": {"project_id": {"type": "integer"}},
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "find_underloaded_testers",
+            "description": "Testers whose active estimated hours are below a threshold (default: team average). Use before assigning new work.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "threshold_hours": {"type": "number", "description": "Load threshold in hours"}
+                },
+            },
+        },
+    },
+]
+
 TOOL_FN_MAP = {
     "get_team_members": agent_tools.get_team_members,
     "get_workload_summary": agent_tools.get_workload_summary,
@@ -236,9 +341,23 @@ TOOL_FN_MAP = {
     "create_task": agent_tools.create_task,
     "create_tasks_bulk": agent_tools.create_tasks_bulk,
     "update_task": agent_tools.update_task,
+    "reschedule_tasks": agent_tools.reschedule_tasks,
+    "set_dependency": agent_tools.set_dependency,
+    "remove_dependency": agent_tools.remove_dependency,
+    "assign_bulk": agent_tools.assign_bulk,
+    "get_critical_path": agent_tools.get_critical_path,
+    "find_underloaded_testers": agent_tools.find_underloaded_testers,
 }
 
-WRITE_TOOLS = {"create_task", "create_tasks_bulk", "update_task"}
+WRITE_TOOLS = {
+    "create_task",
+    "create_tasks_bulk",
+    "update_task",
+    "reschedule_tasks",
+    "set_dependency",
+    "remove_dependency",
+    "assign_bulk",
+}
 
 
 def _client() -> OpenAI:
@@ -256,11 +375,19 @@ def check_llm() -> bool:
 
 def run_agent(
     messages: list[dict], db: Session, current_user_id: int | None = None
-) -> tuple[str, list[dict]]:
-    """Run the tool loop. Returns (final reply text, list of actions taken)."""
+) -> tuple[str, list[dict], list[dict], bool]:
+    """Run the tool loop.
+
+    Returns (reply text, actions taken, explanation, pending_confirmation) —
+    `explanation` is one {tool, rationale, confidence} entry per committed write;
+    `pending_confirmation` is True when a bulk tool returned a plan awaiting an
+    explicit user yes (nothing was committed for that call).
+    """
     client = _client()
     convo: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}, *messages]
     actions: list[dict] = []
+    explanation: list[dict] = []
+    pending_confirmation = False
 
     for _ in range(MAX_ITERATIONS):
         response = client.chat.completions.create(
@@ -273,7 +400,7 @@ def run_agent(
         message = response.choices[0].message
 
         if not message.tool_calls:
-            return message.content or "", actions
+            return message.content or "", actions, explanation, pending_confirmation
 
         convo.append(
             {
@@ -317,7 +444,18 @@ def run_agent(
                     result = {"error": f"tool '{name}' failed unexpectedly"}
 
             if name in WRITE_TOOLS and "error" not in result:
-                actions.append({"tool": name, "args": args, "result": result})
+                if result.get("needs_confirmation"):
+                    pending_confirmation = True
+                else:
+                    actions.append({"tool": name, "args": args, "result": result})
+                    if "rationale" in result:
+                        explanation.append(
+                            {
+                                "tool": name,
+                                "rationale": result["rationale"],
+                                "confidence": result.get("confidence"),
+                            }
+                        )
 
             convo.append(
                 {
@@ -327,4 +465,9 @@ def run_agent(
                 }
             )
 
-    return "I hit my tool-call limit before finishing. Here's where I got to.", actions
+    return (
+        "I hit my tool-call limit before finishing. Here's where I got to.",
+        actions,
+        explanation,
+        pending_confirmation,
+    )

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from .. import schemas
+from .. import agent_tools, schemas
 from ..auth import get_current_user, hash_password, require_manager
 from ..database import get_db
 from ..models import Task, TaskStatus, User
@@ -40,6 +40,16 @@ def create_user(
     db.commit()
     db.refresh(user)
     return user
+
+
+@router.get("/underloaded")
+def underloaded_testers(
+    threshold_hours: float | None = None,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Mirror of the agent's find_underloaded_testers tool (same code path)."""
+    return agent_tools.find_underloaded_testers(db, threshold_hours=threshold_hours)
 
 
 @router.get("/{user_id}", response_model=schemas.UserOut)

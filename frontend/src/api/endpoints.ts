@@ -1,5 +1,6 @@
 import type {
   AgentAction,
+  AgentExplanation,
   AgentStatus,
   Attachment,
   Comment,
@@ -220,6 +221,11 @@ export const agentApi = {
   status: () => api.get<AgentStatus>('/agent/status').then((r) => r.data),
   chat: (messages: { role: string; content: string }[]) =>
     api
-      .post<{ reply: string; actions: AgentAction[] }>('/agent/chat', { messages })
+      .post<{
+        reply: string;
+        actions: AgentAction[];
+        explanation: AgentExplanation[];
+        pending_confirmation: boolean;
+      }>('/agent/chat', { messages })
       .then((r) => r.data),
 };

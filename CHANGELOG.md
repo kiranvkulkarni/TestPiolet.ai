@@ -1,5 +1,32 @@
 # Changelog
 
+## [Unreleased] — E3: Explainable AI + Operations Assistant (USP #2)
+- **Six new agent tools** (16 total), each with a REST mirror calling the same
+  function: `reschedule_tasks` (bulk, leave/calendar-aware, pushes dependents →
+  `POST /tasks/reschedule`), `assign_bulk` (workload-balanced, avoids approved
+  leave, `exclude_user_ids` to move work off someone → `POST /tasks/assign-balanced`),
+  `set_dependency` / `remove_dependency` (cycle-safe; mirror the E1 endpoints),
+  `get_critical_path` (→ `GET /tasks/critical-path`), `find_underloaded_testers`
+  (→ `GET /users/underloaded`).
+- **Explainable AI:** every write tool returns `{rationale, confidence, undo}`;
+  `run_agent` aggregates `explanation` and `/agent/chat` now returns
+  `{reply, actions, explanation, pending_confirmation}`. All AI mutations write
+  `AuditLog` rows marked `[AI]` under the current user.
+- **Confirmation flow:** bulk write tools (5+ items) return a `needs_confirmation`
+  plan instead of committing; only an explicit user yes re-calls with
+  `confirm=true` (system prompt forbids the model setting it alone).
+- **ChatWidget:** per-action explanation cards (rationale + confidence badge),
+  one-click **Undo** (executes the machine-readable undo payload through the
+  normal REST endpoints), "View in Gantt" link, and Yes/Cancel quick replies for
+  pending plans.
+- **Refactor:** scheduling glue (calendars, durations, push-persist, critical
+  path) extracted from the tasks router into `app/schedule_glue.py`, shared by
+  the router and the AI tools — one code path for schedule math.
+- **Tests:** +22 (91 total): reschedule incl. leave snapping + dependent pushes +
+  `[AI]` audit rows, dependency cycle/duplicate rejection, workload balancing +
+  leave avoidance + exclusions, both confirmation gates (nothing committed
+  without confirm), critical path ordering, underloaded testers, REST mirrors.
+
 ## [Unreleased] — E2: editable Gantt workspace (USP #1)
 - **Custom timeline component** (ADR-0004 decided: build custom, `gantt-task-react`
   removed): `components/gantt/GanttWorkspace.tsx` + pure `timeline.ts` +

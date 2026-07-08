@@ -322,6 +322,18 @@ class RescheduleResult(BaseModel):
     critical_path: list[int]
 
 
+class RescheduleTasksRequest(BaseModel):
+    task_ids: list[int] = Field(min_length=1)
+    start_date: date
+    confirm: bool = False
+
+
+class AssignBalancedRequest(BaseModel):
+    task_ids: list[int] = Field(min_length=1)
+    exclude_user_ids: list[int] = []
+    confirm: bool = False
+
+
 class DependencyResult(BaseModel):
     dependency: DependencyOut | None = None
     affected: list["TaskOut"] = []
@@ -446,6 +458,8 @@ class AgentChatRequest(BaseModel):
 class AgentChatResponse(BaseModel):
     reply: str
     actions: list[dict]
+    explanation: list[dict] = []  # {tool, rationale, confidence} per committed write
+    pending_confirmation: bool = False  # a bulk plan is awaiting the user's explicit yes
 
 
 class AgentStatus(BaseModel):

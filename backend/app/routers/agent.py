@@ -35,10 +35,12 @@ def agent_chat(
 
     messages = [{"role": m.role, "content": m.content} for m in body.messages]
     try:
-        reply, actions = run_agent(messages, db, current_user.id)
+        reply, actions, explanation, pending = run_agent(messages, db, current_user.id)
     except Exception:
         raise HTTPException(
             status_code=502,
             detail="Could not reach the local LLM. Check LLM_BASE_URL and that the model is running.",
         )
-    return schemas.AgentChatResponse(reply=reply, actions=actions)
+    return schemas.AgentChatResponse(
+        reply=reply, actions=actions, explanation=explanation, pending_confirmation=pending
+    )

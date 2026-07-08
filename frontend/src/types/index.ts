@@ -220,14 +220,32 @@ export interface AgentStatus {
   model: string | null;
 }
 
+export type AgentUndo =
+  | { kind: 'update_tasks'; tasks: { id: number; fields: Record<string, unknown> }[] }
+  | { kind: 'delete_tasks'; ids: number[] }
+  | { kind: 'add_dependency'; from_task_id: number; to_task_id: number }
+  | { kind: 'remove_dependency'; task_id: number; dep_id: number };
+
 export interface AgentAction {
   tool: string;
   args: Record<string, unknown>;
-  result: Record<string, unknown>;
+  result: Record<string, unknown> & {
+    rationale?: string;
+    confidence?: number;
+    undo?: AgentUndo;
+  };
+}
+
+export interface AgentExplanation {
+  tool: string;
+  rationale: string;
+  confidence: number | null;
 }
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   actions?: AgentAction[];
+  explanation?: AgentExplanation[];
+  pendingConfirmation?: boolean;
 }

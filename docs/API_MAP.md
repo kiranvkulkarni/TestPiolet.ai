@@ -12,6 +12,8 @@ Use this to find the endpoint to extend rather than inventing a new one.
 ## Users & team
 - `GET  /users` · `POST /users` · `GET /users/{id}` · `PUT /users/{id}`
 - `GET  /users/{id}/workload` — active-task load for one user.
+- `GET  /users/underloaded?threshold_hours=` — testers with headroom (E3; mirrors the
+  AI tool).
 
 ## Projects
 - `GET /projects` · `POST /projects` · `GET /projects/{id}` · `PUT /projects/{id}` · `DELETE /projects/{id}`
@@ -37,6 +39,10 @@ Use this to find the endpoint to extend rather than inventing a new one.
   `PATCH /tasks/{id}/resize` (new due date **or** working-day duration),
   `POST /tasks/{id}/dependencies` (link a predecessor; 400 on cycle, 409 on duplicate),
   `DELETE /tasks/{id}/dependencies/{dep_id}` (unlink; never reschedules).
+- Operations (E3; REST mirrors of the AI tools — same code path, rationale + confidence
+  + undo in the response; 5+ items need `confirm: true`):
+  `POST /tasks/reschedule` (bulk leave-aware move), `POST /tasks/assign-balanced`
+  (workload-balanced assignment), `GET /tasks/critical-path?project_id=`.
 - Comments: `GET|POST /tasks/{id}/comments`, `PUT|DELETE /tasks/{id}/comments/{comment_id}`.
 - Attachments: `GET|POST /tasks/{id}/attachments`,
   `GET /tasks/{id}/attachments/{att_id}/download`, `DELETE /tasks/{id}/attachments/{att_id}`.
@@ -57,7 +63,9 @@ Use this to find the endpoint to extend rather than inventing a new one.
 
 ## AI agent
 - `GET  /agent/status` — whether the agent is enabled + LLM reachable.
-- `POST /agent/chat` — `{messages: [...]}` → `{reply, actions}` (runs the tool loop).
+- `POST /agent/chat` — `{messages: [...]}` →
+  `{reply, actions, explanation, pending_confirmation}` (runs the tool loop; each
+  committed write carries `{tool, rationale, confidence}` in `explanation`).
 
 ## Conventions for new endpoints
 - Keep the resource prefix + verb pattern above; return Pydantic schemas from `schemas.py`.

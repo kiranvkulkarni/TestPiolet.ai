@@ -88,9 +88,9 @@ sequenceDiagram
 |---------------------|-------------|
 | Real dependencies + critical path | **done (E1)** — `task_dependencies` table (ADR-0005) + framework-free `app/scheduling.py` (CPM, working calendars, cycle rejection) |
 | Editable Gantt workspace | **done (E2)** — custom timeline in `components/gantt/` (ADR-0004) consuming the E1 endpoints with optimistic updates + undo/redo |
-| Stronger AI assistant | new functions in `agent_tools.py` + schemas in `TOOLS` + `TOOL_FN_MAP` |
+| Stronger AI assistant | **done (E3)** — 16 tools incl. reschedule/assign-balanced/dependencies/critical-path, all with REST mirrors |
 | AI planner / simulator | new agent tools + a non-destructive "scenario" path over the scheduling module |
-| Explainable AI | `run_agent` returns rationale + confidence alongside `actions` |
+| Explainable AI | **done (E3)** — write tools return rationale + confidence + undo; `run_agent` aggregates `explanation`; 5+ item writes gate on user confirmation |
 | Migrations | **done (E0)** — Alembic with a baseline revision; every schema change ships a migration (ADR-0003, `backend/README.md`) |
 
 ## Deployment (current)

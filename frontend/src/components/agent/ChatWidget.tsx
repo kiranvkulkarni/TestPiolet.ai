@@ -1,15 +1,123 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bot, Send, Sparkles, X } from 'lucide-react';
+import { Bot, Check, ExternalLink, Send, Sparkles, Undo2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { agentApi } from '../../api/endpoints';
+import toast from 'react-hot-toast';
+import { Link } from 'react-router-dom';
 import { apiErrorMessage } from '../../api/client';
-import type { ChatMessage } from '../../types';
+import { agentApi, tasksApi } from '../../api/endpoints';
+import type { AgentAction, AgentUndo, ChatMessage } from '../../types';
 import { cn } from '../../utils/cn';
+
+/** Task ids an action touched (for the "view in Gantt" affordance). */
+function affectedTaskIds(action: AgentAction): number[] {
+  const ids = new Set<number>();
+  const r = action.result as Record<string, unknown>;
+  for (const key of ['created', 'updated']) {
+    const v = r[key] as { id?: number } | undefined;
+    if (v?.id) ids.add(v.id);
+  }
+  for (const key of ['created', 'rescheduled', 'pushed_dependents', 'assigned']) {
+    const list = r[key];
+    if (Array.isArray(list)) list.forEach((t: { id?: number }) => t?.id && ids.add(t.id));
+  }
+  return [...ids];
+}
+
+async function executeUndo(undo: AgentUndo): Promise<void> {
+  switch (undo.kind) {
+    case 'update_tasks':
+      for (const t of undo.tasks) await tasksApi.update(t.id, t.fields);
+      break;
+    case 'delete_tasks':
+      for (const id of undo.ids) await tasksApi.remove(id);
+      break;
+    case 'add_dependency':
+      await tasksApi.addDependency(undo.to_task_id, undo.from_task_id);
+      break;
+    case 'remove_dependency':
+      await tasksApi.removeDependency(undo.task_id, undo.dep_id);
+      break;
+  }
+}
+
+function ActionCard({
+  action,
+  undone,
+  onUndone,
+}: {
+  action: AgentAction;
+  undone: boolean;
+  onUndone: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const { rationale, confidence, undo } = action.result;
+  const taskIds = affectedTaskIds(action);
+  const pct = typeof confidence === 'number' ? Math.round(confidence * 100) : null;
+
+  return (
+    <div className="mt-1.5 rounded-lg border border-indigo-100 bg-indigo-50/60 p-2 text-xs">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-semibold text-indigo-700">⚙️ {action.tool}</span>
+        {pct !== null && (
+          <span
+            className={cn(
+              'rounded-full px-1.5 py-0.5 font-medium',
+              pct >= 85 ? 'bg-green-100 text-green-700'
+                : pct >= 70 ? 'bg-amber-100 text-amber-700'
+                : 'bg-red-100 text-red-700',
+            )}
+            title="The assistant's confidence in this action"
+          >
+            {pct}%
+          </span>
+        )}
+      </div>
+      {rationale && <p className="mt-1 text-slate-600">{rationale}</p>}
+      <div className="mt-1.5 flex items-center gap-3">
+        {taskIds.length > 0 && (
+          <Link
+            to="/gantt"
+            className="flex items-center gap-1 text-indigo-600 hover:underline"
+            title={`Tasks: ${taskIds.join(', ')}`}
+          >
+            <ExternalLink size={11} /> View in Gantt ({taskIds.length} task
+            {taskIds.length > 1 ? 's' : ''})
+          </Link>
+        )}
+        {undo && !undone && (
+          <button
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                await executeUndo(undo);
+                queryClient.invalidateQueries({ queryKey: ['tasks'] });
+                queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+                onUndone();
+                toast.success('AI action undone');
+              } catch (error) {
+                toast.error(apiErrorMessage(error));
+              } finally {
+                setBusy(false);
+              }
+            }}
+            className="flex items-center gap-1 text-slate-500 hover:text-red-600 disabled:opacity-50"
+          >
+            <Undo2 size={11} /> {busy ? 'Undoing…' : 'Undo'}
+          </button>
+        )}
+        {undone && <span className="text-slate-400">↩︎ undone</span>}
+      </div>
+    </div>
+  );
+}
 
 export function ChatWidget() {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [undoneActions, setUndoneActions] = useState<Set<string>>(new Set());
   const bottomRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
 
@@ -25,7 +133,13 @@ export function ChatWidget() {
     onSuccess: (data) => {
       setMessages((prev) => [
         ...prev,
-        { role: 'assistant', content: data.reply, actions: data.actions },
+        {
+          role: 'assistant',
+          content: data.reply,
+          actions: data.actions,
+          explanation: data.explanation,
+          pendingConfirmation: data.pending_confirmation,
+        },
       ]);
       if (data.actions.length > 0) {
         // the agent mutated tasks — refresh everything task-shaped
@@ -46,14 +160,17 @@ export function ChatWidget() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, chat.isPending]);
 
-  const send = () => {
-    const content = input.trim();
-    if (!content || chat.isPending) return;
-    const next: ChatMessage[] = [...messages, { role: 'user', content }];
+  const sendText = (content: string) => {
+    if (!content.trim() || chat.isPending) return;
+    const next: ChatMessage[] = [...messages, { role: 'user', content: content.trim() }];
     setMessages(next);
     setInput('');
     chat.mutate(next);
   };
+
+  const lastMessage = messages[messages.length - 1];
+  const awaitingConfirmation =
+    lastMessage?.role === 'assistant' && lastMessage.pendingConfirmation && !chat.isPending;
 
   return (
     <>
@@ -66,11 +183,11 @@ export function ChatWidget() {
       </button>
 
       {open && (
-        <div className="fixed right-5 bottom-20 z-40 flex h-[520px] w-96 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+        <div className="fixed right-5 bottom-20 z-40 flex h-[560px] w-[26rem] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
           <div className="flex items-center gap-2 border-b border-slate-200 bg-indigo-600 px-4 py-3 text-white">
             <Bot size={18} />
             <div className="flex-1">
-              <p className="text-sm font-semibold">AI Assistant</p>
+              <p className="text-sm font-semibold">AI Operations Assistant</p>
               <p className="text-xs text-indigo-200">
                 {status?.enabled
                   ? status.llm_reachable
@@ -86,8 +203,8 @@ export function ChatWidget() {
               <div className="mt-6 px-2 text-center text-sm text-slate-500">
                 <p className="font-medium text-slate-700">Ask me to operate the schedule.</p>
                 <p className="mt-2">
-                  “Who has the lightest workload?” · “Create a sanity task for HDR on the S25 Ultra
-                  due Friday” · “Mark task 12 completed”
+                  “Rebalance next week's sanity tasks off Priya” · “What's the critical path of
+                  Camera v16?” · “Who has capacity for 16 more hours?”
                 </p>
                 {!status?.enabled && (
                   <p className="mt-3 rounded-lg bg-amber-50 p-2 text-xs text-amber-700">
@@ -101,21 +218,40 @@ export function ChatWidget() {
               <div key={i} className={cn('flex', m.role === 'user' && 'justify-end')}>
                 <div
                   className={cn(
-                    'max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap',
-                    m.role === 'user'
-                      ? 'bg-indigo-600 text-white'
-                      : 'bg-slate-100 text-slate-800',
+                    'max-w-[90%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap',
+                    m.role === 'user' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-800',
                   )}
                 >
                   {m.content}
-                  {m.actions && m.actions.length > 0 && (
-                    <p className="mt-1.5 border-t border-slate-200 pt-1.5 text-xs text-slate-500">
-                      ⚙️ {m.actions.map((a) => a.tool).join(', ')}
-                    </p>
-                  )}
+                  {m.actions?.map((action, j) => (
+                    <ActionCard
+                      key={j}
+                      action={action}
+                      undone={undoneActions.has(`${i}:${j}`)}
+                      onUndone={() =>
+                        setUndoneActions((prev) => new Set(prev).add(`${i}:${j}`))
+                      }
+                    />
+                  ))}
                 </div>
               </div>
             ))}
+            {awaitingConfirmation && (
+              <div className="flex gap-2 pl-1">
+                <button
+                  onClick={() => sendText('Yes, go ahead — confirmed.')}
+                  className="flex items-center gap-1 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700"
+                >
+                  <Check size={13} /> Yes, do it
+                </button>
+                <button
+                  onClick={() => sendText('No, cancel that.')}
+                  className="flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50"
+                >
+                  <X size={13} /> Cancel
+                </button>
+              </div>
+            )}
             {chat.isPending && (
               <div className="flex">
                 <div className="rounded-2xl bg-slate-100 px-3 py-2 text-sm text-slate-400">
@@ -130,13 +266,13 @@ export function ChatWidget() {
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && send()}
+              onKeyDown={(e) => e.key === 'Enter' && sendText(input)}
               placeholder={status?.enabled ? 'Ask the assistant…' : 'Agent disabled'}
               disabled={!status?.enabled || chat.isPending}
               className="flex-1 rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-indigo-500 focus:outline-none disabled:bg-slate-50"
             />
             <button
-              onClick={send}
+              onClick={() => sendText(input)}
               disabled={!status?.enabled || chat.isPending || !input.trim()}
               className="rounded-lg bg-indigo-600 p-2 text-white hover:bg-indigo-700 disabled:opacity-40"
               aria-label="Send"
