@@ -33,6 +33,7 @@ local LLM reachable at `LLM_BASE_URL` (e.g. `ollama serve` with `LLM_MODEL=llama
 
 ## Where everything is
 
+- **Complete feature guide (with examples)** → `docs/USER_GUIDE.md`
 - **How to work on this repo** → `CLAUDE.md` (read it first, every session)
 - Vision & USPs → `docs/PRODUCT_VISION.md` · Architecture → `docs/ARCHITECTURE.md`
 - Schema & enums → `docs/DATA_MODEL.md` · API surface → `docs/API_MAP.md`

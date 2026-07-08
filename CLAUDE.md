@@ -152,6 +152,7 @@ Full guidance: `docs/UX_GUIDELINES.md`.
 
 ## Where to look
 
+- Features & usage guide (user-facing, with examples) → `docs/USER_GUIDE.md`
 - Vision & USPs → `docs/PRODUCT_VISION.md`
 - Architecture & stack → `docs/ARCHITECTURE.md`
 - Schema & enums → `docs/DATA_MODEL.md`

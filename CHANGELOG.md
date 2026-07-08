@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased] — Documentation: user guide
+- Added `docs/USER_GUIDE.md` — the complete feature & requirements guide with
+  examples: setup + configuration reference, core concepts and scheduling
+  semantics, every feature (Dashboard, Tasks, Gantt workspace interactions,
+  AI assistant prompts, Planner walkthrough, Simulator scenarios, requests/
+  projects, team, leaves, reports, devices, notifications), a curl-based API
+  walkthrough, the AI safety & audit model, development workflow, and
+  troubleshooting. Linked from README and CLAUDE.md.
+
 ## [Unreleased] — E5: AI Timeline Simulator
 - **`app/simulator.py`** (ADR-0006: scenarios computed in-memory, nothing
   persisted, nothing written): forks the live plan into pure scheduling-engine
