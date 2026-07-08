@@ -5,6 +5,7 @@ import { DeviceModels } from './pages/DeviceModels';
 import { GanttView } from './pages/GanttView';
 import { Leaves } from './pages/Leaves';
 import { Login } from './pages/Login';
+import { Planner } from './pages/Planner';
 import { Projects } from './pages/Projects';
 import { Reports } from './pages/Reports';
 import { Tasks } from './pages/Tasks';
@@ -30,6 +31,7 @@ export default function App() {
         <Route path="/" element={<Dashboard />} />
         <Route path="/tasks" element={<Tasks />} />
         <Route path="/gantt" element={<GanttView />} />
+        <Route path="/planner" element={<Planner />} />
         <Route path="/test-requests" element={<TestRequests />} />
         <Route path="/projects" element={<Projects />} />
         <Route path="/team" element={<Team />} />

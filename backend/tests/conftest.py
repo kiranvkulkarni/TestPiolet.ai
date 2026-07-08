@@ -53,7 +53,9 @@ def seeded(db: Session) -> dict:
     )
     priya = User(name="Priya", email="priya@test.local", password_hash="x", role=UserRole.tester)
     ravi = User(name="Ravi", email="ravi@test.local", password_hash="x", role=UserRole.tester)
-    device = DeviceModel(brand="Samsung", series="Galaxy S", model_name="SM-S938B")
+    device = DeviceModel(
+        brand="Samsung", series="Galaxy S", model_name="SM-S938B (Galaxy S25 Ultra)"
+    )
     db.add_all([manager, priya, ravi, device])
     db.flush()
 

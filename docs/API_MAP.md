@@ -66,6 +66,10 @@ Use this to find the endpoint to extend rather than inventing a new one.
 - `POST /agent/chat` — `{messages: [...]}` →
   `{reply, actions, explanation, pending_confirmation}` (runs the tool loop; each
   committed write carries `{tool, rationale, confidence}` in `explanation`).
+- Planner (E4, manager-only): `POST /agent/plan` (brief → validated draft; writes
+  nothing), `POST /agent/plan/refresh` (re-validate/re-schedule an edited draft;
+  deterministic, no LLM), `POST /agent/plan/commit` (create the reviewed draft via the
+  audited agent tools).
 
 ## Conventions for new endpoints
 - Keep the resource prefix + verb pattern above; return Pydantic schemas from `schemas.py`.

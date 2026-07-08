@@ -1,5 +1,28 @@
 # Changelog
 
+## [Unreleased] — E4: AI Project Planner
+- **`app/agent_planner.py`** — brief → validated draft plan, in two separated
+  halves: `generate_raw_draft` (the single strict-JSON LLM call) and a fully
+  deterministic pipeline: `validate_and_enrich` (fixes invalid enums with
+  warnings, resolves device names to IDs, workload-balanced assignment that
+  respects explicit picks, drops cycle-forming dependency edges with warnings,
+  schedules everything through the E1 engine incl. approved leave) and
+  `commit_plan` (re-validates hard constraints and refuses on cycles/missing
+  project; creates requests + tasks + dependencies via the audited agent tools).
+  **Never auto-commits** — nothing is written until the manager commits.
+- **Endpoints** (manager-only): `POST /agent/plan` (needs the LLM; 503 when the
+  agent is disabled), `POST /agent/plan/refresh` (deterministic re-validate of an
+  edited draft), `POST /agent/plan/commit`.
+- **Planner page** (`/planner`, sidebar "AI Planner"): brief + target project →
+  AI rationale, warning banner (unknown devices, dropped cycles, leave overlaps),
+  editable plan table (title/type/estimate/assignee/device/priority), draft
+  mini-timeline, "Re-schedule edits", and "Commit N tasks" which lands the plan
+  in the Gantt.
+- **Tests:** +15 (106 total): enum fixing, device resolution, balanced + explicit
+  assignment, cycle dropping (validate) and cycle refusal (commit), leave-aware
+  scheduling, nothing-written-before-commit, commit audit trail (`[AI planner]`),
+  endpoint behavior incl. 503 when disabled.
+
 ## [Unreleased] — E3: Explainable AI + Operations Assistant (USP #2)
 - **Six new agent tools** (16 total), each with a REST mirror calling the same
   function: `reschedule_tasks` (bulk, leave/calendar-aware, pushes dependents →

@@ -10,6 +10,8 @@ import type {
   GanttTask,
   Leave,
   Notification,
+  PlanCommitResult,
+  PlanDraft,
   Project,
   RescheduleResult,
   Task,
@@ -228,4 +230,10 @@ export const agentApi = {
         pending_confirmation: boolean;
       }>('/agent/chat', { messages })
       .then((r) => r.data),
+  plan: (brief: string, project_id?: number, start_date?: string) =>
+    api.post<PlanDraft>('/agent/plan', { brief, project_id, start_date }).then((r) => r.data),
+  planRefresh: (draft: PlanDraft) =>
+    api.post<PlanDraft>('/agent/plan/refresh', { draft }).then((r) => r.data),
+  planCommit: (draft: PlanDraft) =>
+    api.post<PlanCommitResult>('/agent/plan/commit', { draft }).then((r) => r.data),
 };

@@ -7,6 +7,7 @@ import {
   Inbox,
   LayoutDashboard,
   Smartphone,
+  Sparkles,
   Users,
 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
@@ -16,6 +17,7 @@ const NAV = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/tasks', label: 'Tasks', icon: ClipboardList },
   { to: '/gantt', label: 'Gantt', icon: GanttChartSquare },
+  { to: '/planner', label: 'AI Planner', icon: Sparkles },
   { to: '/test-requests', label: 'Test Requests', icon: Inbox },
   { to: '/projects', label: 'Projects', icon: FolderKanban },
   { to: '/team', label: 'Team', icon: Users },

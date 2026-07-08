@@ -79,13 +79,28 @@ only an explicit user yes leads to the tool being re-called with `confirm=true`.
 4. If it mutates data, also expose a matching REST endpoint that calls the same function.
 5. Test it against seeded data in `backend/tests/`.
 
-## Extension plan (roadmap)
+## AI Project Planner (since E4)
 
-### AI Project Planner (E4)
-A tool (or small orchestration) that turns a brief — "Galaxy Camera v16 next week: HDR,
-Night Mode, Portrait Video, 50MP, Expert RAW; 5 testers, 2 devices, 3 days" — into a
-**preview** of test requests + tasks + estimates + assignments + dependencies. Present it,
-let the manager edit, then commit via the existing create tools. Never auto-commit.
+`app/agent_planner.py` + `pages/Planner.tsx`. Two deliberately separated halves:
+
+- **`generate_raw_draft`** — the only LLM call: a strict-JSON planning prompt fed with
+  the brief + a compact team/device context. Output shape: requests → tasks with refs,
+  exact task-type enums, estimates, device names, `depends_on_refs`.
+- **`validate_and_enrich`** — deterministic (fully tested without an LLM): fixes invalid
+  enums (with warnings), resolves device names to real IDs, assigns unowned tasks
+  workload-balanced, drops cycle-forming dependency edges (with warnings), and schedules
+  the whole draft through the E1 engine (weekends + approved leave). Never writes.
+- **`commit_plan`** — runs only on the manager's explicit Commit; re-validates hard
+  constraints (project, refs, cycles) and **refuses** rather than silently fixing, then
+  creates everything through the audited agent tools (`create_tasks_bulk` with
+  `confirm=True` — the click is the confirmation — and `set_dependency`).
+
+Endpoints (manager-only): `POST /agent/plan` (brief → draft; 503 if agent disabled),
+`POST /agent/plan/refresh` (re-validate an edited draft; deterministic, no LLM),
+`POST /agent/plan/commit`. The Planner page shows warnings, the AI's rationale, an
+editable table (title/type/estimate/assignee/device/priority), and a mini-timeline.
+
+## Extension plan (roadmap)
 
 ### AI Timeline Simulator (E5)
 A **non-destructive** path: fork the current plan into a scenario, apply a perturbation

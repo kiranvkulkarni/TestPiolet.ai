@@ -468,6 +468,22 @@ class AgentStatus(BaseModel):
     model: str | None = None
 
 
+class PlanRequest(BaseModel):
+    brief: str = Field(min_length=10)
+    project_id: int | None = None
+    start_date: date | None = None
+
+
+class PlanRefreshRequest(BaseModel):
+    draft: dict  # an edited draft (same shape validate_and_enrich returns)
+    project_id: int | None = None
+    start_date: date | None = None
+
+
+class PlanCommitRequest(BaseModel):
+    draft: dict
+
+
 TokenResponse.model_rebuild()
 RescheduleResult.model_rebuild()
 DependencyResult.model_rebuild()

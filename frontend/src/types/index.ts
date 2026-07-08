@@ -249,3 +249,45 @@ export interface ChatMessage {
   explanation?: AgentExplanation[];
   pendingConfirmation?: boolean;
 }
+
+// ---- AI Planner (E4) --------------------------------------------------------
+
+export interface DraftTask {
+  ref: string;
+  title: string;
+  task_type: TaskType;
+  priority: Priority;
+  estimated_hours: number;
+  device_model_id: number | null;
+  device_model_name: string | null;
+  assigned_to: number | null;
+  assignee_name: string | null;
+  depends_on_refs: string[];
+  start_date: string | null;
+  due_date: string | null;
+}
+
+export interface DraftRequest {
+  title: string;
+  priority: Priority;
+  description: string | null;
+  tasks: DraftTask[];
+}
+
+export interface PlanDraft {
+  project_id: number | null;
+  project_name: string | null;
+  start_date: string;
+  requests: DraftRequest[];
+  warnings: string[];
+  rationale: string;
+  project_end: string | null;
+}
+
+export interface PlanCommitResult {
+  project_id: number;
+  request_ids: number[];
+  task_ids: number[];
+  dependency_count: number;
+  rationale: string;
+}
