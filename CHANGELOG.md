@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased] — Documentation: user guide
+## [1.0.0] — 2026-07-08 — Documentation: user guide
 - Added `docs/USER_GUIDE.md` — the complete feature & requirements guide with
   examples: setup + configuration reference, core concepts and scheduling
   semantics, every feature (Dashboard, Tasks, Gantt workspace interactions,
@@ -9,7 +9,7 @@
   walkthrough, the AI safety & audit model, development workflow, and
   troubleshooting. Linked from README and CLAUDE.md.
 
-## [Unreleased] — E5: AI Timeline Simulator
+## [1.0.0] — 2026-07-08 — E5: AI Timeline Simulator
 - **`app/simulator.py`** (ADR-0006: scenarios computed in-memory, nothing
   persisted, nothing written): forks the live plan into pure scheduling-engine
   inputs, applies perturbations — `leave` (person out for a range), `slip`
@@ -31,7 +31,7 @@
   untouched before and after, determinism, mitigation ranking + explanation +
   apply-payload shape, endpoint read-only behavior and 400s.
 
-## [Unreleased] — E4: AI Project Planner
+## [1.0.0] — 2026-07-08 — E4: AI Project Planner
 - **`app/agent_planner.py`** — brief → validated draft plan, in two separated
   halves: `generate_raw_draft` (the single strict-JSON LLM call) and a fully
   deterministic pipeline: `validate_and_enrich` (fixes invalid enums with
@@ -54,7 +54,7 @@
   scheduling, nothing-written-before-commit, commit audit trail (`[AI planner]`),
   endpoint behavior incl. 503 when disabled.
 
-## [Unreleased] — E3: Explainable AI + Operations Assistant (USP #2)
+## [1.0.0] — 2026-07-08 — E3: Explainable AI + Operations Assistant (USP #2)
 - **Six new agent tools** (16 total), each with a REST mirror calling the same
   function: `reschedule_tasks` (bulk, leave/calendar-aware, pushes dependents →
   `POST /tasks/reschedule`), `assign_bulk` (workload-balanced, avoids approved
@@ -81,7 +81,7 @@
   leave avoidance + exclusions, both confirmation gates (nothing committed
   without confirm), critical path ordering, underloaded testers, REST mirrors.
 
-## [Unreleased] — E2: editable Gantt workspace (USP #1)
+## [1.0.0] — 2026-07-08 — E2: editable Gantt workspace (USP #1)
 - **Custom timeline component** (ADR-0004 decided: build custom, `gantt-task-react`
   removed): `components/gantt/GanttWorkspace.tsx` + pure `timeline.ts` +
   `useUndoStack.ts`.
@@ -103,7 +103,7 @@
 - **API:** `GET /tasks/gantt` rows now include `dependency_edges`
   (`{id, from_task_id}`) so the UI can unlink without an extra round-trip.
 
-## [Unreleased] — E1: dependencies + scheduling engine (backend only)
+## [1.0.0] — 2026-07-08 — E1: dependencies + scheduling engine (backend only)
 - **`task_dependencies` table** (ADR-0005): typed many-to-many edges
   (`finish_to_start`), unique per edge, cycles rejected. The migration copies
   legacy `Task.depends_on` values into the table; the column is deprecated —
@@ -124,7 +124,7 @@
   leave-aware snapping, legacy mirroring, gantt enrichment). Suite: 69 green.
 - No frontend change (E2 consumes this).
 
-## [Unreleased] — E0: harden the baseline
+## [1.0.0] — 2026-07-08 — E0: harden the baseline
 - **Alembic migrations** (ADR-0003 accepted): `backend/alembic/` with a baseline
   revision generated from `models.py` (verified drift-free via `alembic check`).
   Fresh DBs: `alembic upgrade head`; pre-existing DBs: `alembic stamp head`.
@@ -140,7 +140,7 @@
   routers and AI write tools in the baseline; now locked in by tests.
 - No user-facing change; no schema change.
 
-## [Unreleased] — Baseline application built
+## [1.0.0] — 2026-07-08 — Baseline application built
 - **Backend (FastAPI)**: full app under `backend/app/` — models + enums per
   `docs/DATA_MODEL.md`, Pydantic v2 schemas, JWT auth (bcrypt, 8-hour tokens),
   13 routers covering the whole surface in `docs/API_MAP.md` (auth, users,
@@ -164,7 +164,7 @@
 - **Note**: seed logins use `.local` addresses, so email fields are plain strings
   (not `EmailStr`) in the API schemas.
 
-## [Unreleased] — Context package added
+## [1.0.0] — 2026-07-08 — Context package added
 - Added Claude Code context package: CLAUDE.md, product/architecture/data-model/API/
   standards/UX docs, ADRs (incl. migrations + Gantt approach), and an evolution roadmap
   with a per-milestone prompt library (E0–E5).
