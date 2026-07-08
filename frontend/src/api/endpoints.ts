@@ -10,10 +10,12 @@ import type {
   GanttTask,
   Leave,
   Notification,
+  Perturbation,
   PlanCommitResult,
   PlanDraft,
   Project,
   RescheduleResult,
+  SimulationResult,
   Task,
   TestCycle,
   TestRequest,
@@ -236,4 +238,12 @@ export const agentApi = {
     api.post<PlanDraft>('/agent/plan/refresh', { draft }).then((r) => r.data),
   planCommit: (draft: PlanDraft) =>
     api.post<PlanCommitResult>('/agent/plan/commit', { draft }).then((r) => r.data),
+};
+
+// ---- Timeline Simulator (read-only) -------------------------------------------
+export const simulationsApi = {
+  run: (perturbations: Perturbation[], project_id?: number) =>
+    api
+      .post<SimulationResult>('/simulations', { project_id, perturbations })
+      .then((r) => r.data),
 };

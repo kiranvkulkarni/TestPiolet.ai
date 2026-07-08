@@ -10,7 +10,7 @@ import logging
 from openai import OpenAI
 from sqlalchemy.orm import Session
 
-from . import agent_tools
+from . import agent_tools, simulator
 from .config import settings
 
 logger = logging.getLogger(__name__)
@@ -318,6 +318,43 @@ TOOLS += [
     {
         "type": "function",
         "function": {
+            "name": "run_simulation",
+            "description": "Non-destructive what-if simulation over the current plan. NEVER changes real data. Returns affected tasks, predicted end-date delay, critical-path change, and ranked reassignment mitigations with explanations. Use for questions like 'what if Priya is out next week' or 'what if task 42 slips 3 days'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "integer", "description": "Limit the scenario to one project"},
+                    "perturbations": {
+                        "type": "array",
+                        "description": "One or more what-if changes to overlay on the plan",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "type": {
+                                    "type": "string",
+                                    "enum": ["leave", "slip", "remove_task", "add_task"],
+                                },
+                                "user_id": {"type": "integer", "description": "leave: who is out"},
+                                "start_date": {"type": "string", "description": "leave: YYYY-MM-DD"},
+                                "end_date": {"type": "string", "description": "leave: YYYY-MM-DD"},
+                                "task_id": {"type": "integer", "description": "slip/remove_task: which task"},
+                                "days": {"type": "integer", "description": "slip: delay in days"},
+                                "title": {"type": "string", "description": "add_task: title"},
+                                "estimated_hours": {"type": "number", "description": "add_task"},
+                                "assigned_to": {"type": "integer", "description": "add_task: tester id"},
+                                "after_task_id": {"type": "integer", "description": "add_task: predecessor"},
+                            },
+                            "required": ["type"],
+                        },
+                    },
+                },
+                "required": ["perturbations"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "find_underloaded_testers",
             "description": "Testers whose active estimated hours are below a threshold (default: team average). Use before assigning new work.",
             "parameters": {
@@ -347,6 +384,7 @@ TOOL_FN_MAP = {
     "assign_bulk": agent_tools.assign_bulk,
     "get_critical_path": agent_tools.get_critical_path,
     "find_underloaded_testers": agent_tools.find_underloaded_testers,
+    "run_simulation": simulator.run_simulation,
 }
 
 WRITE_TOOLS = {

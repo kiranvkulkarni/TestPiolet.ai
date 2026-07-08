@@ -484,6 +484,11 @@ class PlanCommitRequest(BaseModel):
     draft: dict
 
 
+class SimulationRequest(BaseModel):
+    project_id: int | None = None
+    perturbations: list[dict] = Field(min_length=1)
+
+
 TokenResponse.model_rebuild()
 RescheduleResult.model_rebuild()
 DependencyResult.model_rebuild()

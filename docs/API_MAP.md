@@ -61,6 +61,12 @@ Use this to find the endpoint to extend rather than inventing a new one.
 ## Notifications
 - `GET /notifications` · `GET /notifications/unread-count` · `PATCH /notifications/{id}/read` · `POST /notifications/read-all`
 
+## Simulations
+- `POST /simulations` — `{project_id?, perturbations: [...]}` → non-destructive what-if
+  (E5, ADR-0006): affected tasks, predicted delay, critical-path change, ranked
+  mitigations with `apply` payloads. **Read-only** — mirrors the agent's
+  `run_simulation` tool.
+
 ## AI agent
 - `GET  /agent/status` — whether the agent is enabled + LLM reachable.
 - `POST /agent/chat` — `{messages: [...]}` →

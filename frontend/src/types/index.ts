@@ -291,3 +291,50 @@ export interface PlanCommitResult {
   dependency_count: number;
   rationale: string;
 }
+
+// ---- Timeline Simulator (E5) -------------------------------------------------
+
+export type Perturbation =
+  | { type: 'leave'; user_id: number; start_date: string; end_date: string }
+  | { type: 'slip'; task_id: number; days: number }
+  | { type: 'remove_task'; task_id: number }
+  | {
+      type: 'add_task';
+      title: string;
+      estimated_hours: number;
+      assigned_to?: number | null;
+      after_task_id?: number | null;
+    };
+
+export interface SimAffectedTask {
+  id: number; // negative = synthetic (added in the scenario)
+  title: string;
+  assignee_name: string | null;
+  baseline: { start: string; end: string } | null;
+  scenario: { start: string; end: string };
+  delay_days: number;
+  became_critical: boolean;
+}
+
+export interface SimMitigation {
+  rank: number;
+  explanation: string;
+  recovers_days: number;
+  new_project_end: string;
+  confidence: number;
+  apply: { kind: 'update_tasks'; tasks: { id: number; fields: Record<string, unknown> }[] };
+}
+
+export interface SimulationResult {
+  baseline: { project_end: string; critical_path: number[] };
+  scenario: { project_end: string; critical_path: number[] };
+  predicted_delay_days: number;
+  affected_tasks: SimAffectedTask[];
+  removed_task_ids: number[];
+  added_tasks: { sim_id: number; title: string }[];
+  mitigations: SimMitigation[];
+  perturbations_applied: Record<string, unknown>[];
+  warnings: string[];
+  summary: string;
+  note: string;
+}

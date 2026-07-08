@@ -13,6 +13,7 @@ from .routers import (
     leaves,
     notifications,
     projects,
+    simulations,
     tasks,
     test_cycles,
     test_requests,
@@ -44,6 +45,7 @@ app.include_router(leaves.router)
 app.include_router(dashboard.router)
 app.include_router(notifications.router)
 app.include_router(agent.router)
+app.include_router(simulations.router)
 
 
 @app.get("/health")

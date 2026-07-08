@@ -8,6 +8,7 @@ import { Login } from './pages/Login';
 import { Planner } from './pages/Planner';
 import { Projects } from './pages/Projects';
 import { Reports } from './pages/Reports';
+import { Simulator } from './pages/Simulator';
 import { Tasks } from './pages/Tasks';
 import { Team } from './pages/Team';
 import { TestRequests } from './pages/TestRequests';
@@ -32,6 +33,7 @@ export default function App() {
         <Route path="/tasks" element={<Tasks />} />
         <Route path="/gantt" element={<GanttView />} />
         <Route path="/planner" element={<Planner />} />
+        <Route path="/simulator" element={<Simulator />} />
         <Route path="/test-requests" element={<TestRequests />} />
         <Route path="/projects" element={<Projects />} />
         <Route path="/team" element={<Team />} />

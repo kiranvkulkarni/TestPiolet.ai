@@ -83,5 +83,6 @@ erDiagram
   dates earlier.
 - **AuditLog exists but isn't uniformly written** — standardize writing it on mutations,
   including AI actions, as part of the Explainable-AI work.
-- **Scenarios (what-if)** have no storage yet — the Simulator milestone adds a scenario
-  concept (a non-destructive fork), likely a table with JSON payloads.
+- **Scenarios (what-if):** deliberately **not stored** (ADR-0006) — the Simulator (E5)
+  computes scenarios in-memory from the live plan and returns a diff; add a
+  `scenarios` table only when saving/sharing scenarios becomes a real need.

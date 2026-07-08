@@ -100,12 +100,24 @@ Endpoints (manager-only): `POST /agent/plan` (brief → draft; 503 if agent disa
 `POST /agent/plan/commit`. The Planner page shows warnings, the AI's rationale, an
 editable table (title/type/estimate/assignee/device/priority), and a mini-timeline.
 
-## Extension plan (roadmap)
+## AI Timeline Simulator (since E5)
 
-### AI Timeline Simulator (E5)
-A **non-destructive** path: fork the current plan into a scenario, apply a perturbation
-(leave, slip, scope), recompute via the scheduling module, and return affected tasks,
-predicted delay, critical-path change, and ranked mitigations — with explanations.
+`app/simulator.py` + `pages/Simulator.tsx` + the `run_simulation` agent tool
+(mirrored by `POST /simulations`). Scenarios are **computed in-memory, never
+persisted, never written** (ADR-0006): the current plan becomes pure engine inputs,
+a baseline run and a perturbed run are diffed, and mitigation candidates are ranked
+by re-simulation.
+
+- **Perturbations:** `leave` (person out for a range), `slip` (task delayed N days),
+  `remove_task`, `add_task` (optionally `after_task_id` for a dependency).
+- **Output:** affected tasks (baseline vs scenario spans, per-task delay,
+  became-critical flags), predicted end-date delay, critical-path change, ranked
+  reassignment **mitigations** each with an explanation, recovered days, new end
+  date, confidence, and a machine-executable `apply` payload
+  (`update_tasks` shape). Deterministic for a given scenario.
+- **Applying a mitigation** goes through the normal audited endpoints
+  (`PUT /tasks/{id}`) from the Simulator page or the ChatWidget — never a backdoor,
+  and never automatically.
 
 ## Guardrails
 

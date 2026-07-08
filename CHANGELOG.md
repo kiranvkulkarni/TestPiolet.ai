@@ -1,5 +1,27 @@
 # Changelog
 
+## [Unreleased] — E5: AI Timeline Simulator
+- **`app/simulator.py`** (ADR-0006: scenarios computed in-memory, nothing
+  persisted, nothing written): forks the live plan into pure scheduling-engine
+  inputs, applies perturbations — `leave` (person out for a range), `slip`
+  (task delayed N days), `remove_task`, `add_task` (optionally after a
+  predecessor) — runs baseline vs scenario, and diffs: affected tasks with
+  per-task delay and became-critical flags, predicted end-date delay,
+  critical-path change. Deterministic for a given scenario.
+- **Mitigations:** reassignment candidates (move an impacted assignee's delayed
+  tasks to each other tester) are each **re-simulated** and ranked by actually
+  recovered days; every mitigation carries an explanation, new end date,
+  confidence, and a machine-executable `apply` payload that routes through the
+  normal audited `PUT /tasks/{id}` — never a backdoor, never auto-applied.
+- **Exposure:** `run_simulation` agent tool (the assistant can answer "what if
+  Priya is out next week?") + read-only `POST /simulations` REST mirror.
+- **Simulator page** (`/simulator`): scenario builder (chips per perturbation),
+  impact summary, baseline-vs-scenario overlay bars per affected task, and
+  ranked mitigation cards with one-click Apply.
+- **Tests:** +10 (116 total): leave/slip/remove/add perturbations, plan
+  untouched before and after, determinism, mitigation ranking + explanation +
+  apply-payload shape, endpoint read-only behavior and 400s.
+
 ## [Unreleased] — E4: AI Project Planner
 - **`app/agent_planner.py`** — brief → validated draft plan, in two separated
   halves: `generate_raw_draft` (the single strict-JSON LLM call) and a fully

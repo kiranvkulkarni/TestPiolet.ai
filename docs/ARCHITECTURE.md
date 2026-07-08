@@ -90,7 +90,7 @@ sequenceDiagram
 | Editable Gantt workspace | **done (E2)** — custom timeline in `components/gantt/` (ADR-0004) consuming the E1 endpoints with optimistic updates + undo/redo |
 | Stronger AI assistant | **done (E3)** — 16 tools incl. reschedule/assign-balanced/dependencies/critical-path, all with REST mirrors |
 | AI planner | **done (E4)** — `agent_planner.py`: one LLM drafting call + a deterministic validate/enrich/schedule/commit pipeline; Planner page previews, manager commits |
-| AI simulator | new agent tools + a non-destructive "scenario" path over the scheduling module (E5) |
+| AI simulator | **done (E5)** — `simulator.py`: in-memory scenario fork + diff + re-simulated mitigation ranking (ADR-0006); `run_simulation` tool + `POST /simulations` + Simulator page |
 | Explainable AI | **done (E3)** — write tools return rationale + confidence + undo; `run_agent` aggregates `explanation`; 5+ item writes gate on user confirmation |
 | Migrations | **done (E0)** — Alembic with a baseline revision; every schema change ships a migration (ADR-0003, `backend/README.md`) |
 
