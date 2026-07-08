@@ -2,9 +2,14 @@
 
 Run with:  python -m app.seed
 Idempotent-ish: refuses to run if users already exist.
+
+`python -m app.seed --large` additionally creates a ~450-task project with
+dependency chains — for exercising Gantt performance (E2). Requires the base
+seed to have run first.
 """
 
 import random
+import sys
 from datetime import date, timedelta
 
 from sqlalchemy import select
@@ -20,6 +25,7 @@ from .models import (
     Project,
     ProjectStatus,
     Task,
+    TaskDependency,
     TaskStatus,
     TaskType,
     TestCycle,
@@ -218,5 +224,89 @@ def seed() -> None:
         db.close()
 
 
+LARGE_PROJECT_NAME = "Perf Test — One UI 9 Camera (large)"
+
+
+def seed_large(task_count: int = 450) -> None:
+    """A single big project with dependency chains, for Gantt perf testing."""
+    Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    try:
+        if db.scalar(select(Project).where(Project.name == LARGE_PROJECT_NAME)):
+            print("Large project already seeded — skipping.")
+            return
+        testers = db.scalars(select(User).where(User.role == UserRole.tester)).all()
+        devices = db.scalars(select(DeviceModel)).all()
+        if not testers:
+            print("Run the base seed first: python -m app.seed")
+            return
+
+        rng = random.Random(7)
+        today = date.today()
+        project = Project(
+            name=LARGE_PROJECT_NAME,
+            description=f"Synthetic project with ~{task_count} tasks for performance testing.",
+            color_hex="#8b5cf6",
+            start_date=today,
+            end_date=today + timedelta(days=180),
+        )
+        db.add(project)
+        db.flush()
+
+        types = list(TaskType)
+        requests = []
+        for i in range(task_count // 15):
+            req = TestRequest(
+                project_id=project.id,
+                title=f"Perf request {i + 1}",
+                requested_by="Perf Bot",
+                priority=rng.choice(list(Priority)),
+            )
+            db.add(req)
+            requests.append(req)
+        db.flush()
+
+        prev_chain: list[Task] = []
+        created = 0
+        while created < task_count:
+            req = requests[created % len(requests)]
+            tester = testers[created % len(testers)]
+            start = today + timedelta(days=rng.randint(0, 150))
+            duration = rng.randint(1, 8)
+            task = Task(
+                test_request_id=req.id,
+                title=f"Perf task {created + 1}",
+                task_type=types[created % len(types)],
+                status=rng.choice(
+                    [TaskStatus.pending, TaskStatus.pending, TaskStatus.in_progress, TaskStatus.completed]
+                ),
+                priority=rng.choice(list(Priority)),
+                assigned_to=tester.id,
+                start_date=start,
+                due_date=start + timedelta(days=duration),
+                estimated_hours=float(duration * 6),
+                device_model_id=devices[created % len(devices)].id if devices else None,
+            )
+            db.add(task)
+            db.flush()
+            # chain every ~3rd task to the previous one in its chain bucket
+            if prev_chain and created % 3 != 0:
+                pred = prev_chain[-1]
+                if pred.due_date < task.start_date:  # keep the plan consistent
+                    db.add(TaskDependency(from_task_id=pred.id, to_task_id=task.id))
+            if created % 3 == 0:
+                prev_chain = []
+            prev_chain.append(task)
+            created += 1
+
+        db.commit()
+        print(f"Seeded large project '{LARGE_PROJECT_NAME}' with {created} tasks.")
+    finally:
+        db.close()
+
+
 if __name__ == "__main__":
-    seed()
+    if "--large" in sys.argv:
+        seed_large()
+    else:
+        seed()

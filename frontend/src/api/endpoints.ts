@@ -4,11 +4,13 @@ import type {
   Attachment,
   Comment,
   DashboardSummary,
+  DependencyResult,
   DeviceModel,
   GanttTask,
   Leave,
   Notification,
   Project,
+  RescheduleResult,
   Task,
   TestCycle,
   TestRequest,
@@ -96,6 +98,19 @@ export const tasksApi = {
   updateStatus: (id: number, status: string, actual_hours?: number) =>
     api.patch<Task>(`/tasks/${id}/status`, { status, actual_hours }).then((r) => r.data),
   remove: (id: number) => api.delete(`/tasks/${id}`),
+  // E1 scheduling endpoints (consumed by the Gantt workspace)
+  move: (id: number, start_date: string, keep_duration = true) =>
+    api
+      .patch<RescheduleResult>(`/tasks/${id}/move`, { start_date, keep_duration })
+      .then((r) => r.data),
+  resize: (id: number, args: { due_date?: string; duration_days?: number }) =>
+    api.patch<RescheduleResult>(`/tasks/${id}/resize`, args).then((r) => r.data),
+  addDependency: (id: number, depends_on_task_id: number) =>
+    api
+      .post<DependencyResult>(`/tasks/${id}/dependencies`, { depends_on_task_id })
+      .then((r) => r.data),
+  removeDependency: (id: number, depId: number) =>
+    api.delete<DependencyResult>(`/tasks/${id}/dependencies/${depId}`).then((r) => r.data),
   comments: (taskId: number) =>
     api.get<Comment[]>(`/tasks/${taskId}/comments`).then((r) => r.data),
   addComment: (taskId: number, content: string) =>

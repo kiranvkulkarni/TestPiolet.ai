@@ -280,8 +280,14 @@ class GanttTaskOut(BaseModel):
     test_request_title: str
     depends_on: int | None  # legacy single FK (deprecated; see dependencies)
     dependencies: list[int] = []  # predecessor task ids (from task_dependencies)
+    dependency_edges: list["GanttDependencyEdge"] = []  # incoming edges with row ids
     critical: bool = False
     slack_days: int = 0
+
+
+class GanttDependencyEdge(BaseModel):
+    id: int  # task_dependencies row id (needed to unlink)
+    from_task_id: int
 
 
 # ---------------------------------------------------------------------------
@@ -451,4 +457,5 @@ class AgentStatus(BaseModel):
 TokenResponse.model_rebuild()
 RescheduleResult.model_rebuild()
 DependencyResult.model_rebuild()
+GanttTaskOut.model_rebuild()
 

@@ -75,15 +75,19 @@ sequenceDiagram
   `components/shared/` (Modal, Badge, Avatar, ConfirmDialog). Icons via `lucide-react`,
   toasts via `react-hot-toast`.
 - **Pages** map 1:1 to modules; the AI **ChatWidget** floats on every page.
-- **Gantt today:** `pages/GanttView.tsx` renders `gantt-task-react`, filterable by
-  project/cycle/assignee, fed by `GET /tasks/gantt`.
+- **Gantt (since E2):** `pages/GanttView.tsx` hosts the custom editable timeline
+  (`components/gantt/GanttWorkspace.tsx`, ADR-0004): virtualized assignee-grouped rows,
+  drag-move/edge-resize/dependency-draw/drag-reassign persisted through the E1
+  endpoints with optimistic updates, inline title edit, right-click menu, multi-select,
+  undo/redo command stack, critical-path highlight, workload heatmap, day/week/month
+  zoom, color-by. Fed by the enriched `GET /tasks/gantt`.
 
 ## The evolution seams (where new work attaches)
 
 | Capability (target) | Attaches at |
 |---------------------|-------------|
 | Real dependencies + critical path | **done (E1)** — `task_dependencies` table (ADR-0005) + framework-free `app/scheduling.py` (CPM, working calendars, cycle rejection) |
-| Editable Gantt workspace | replace/augment `GanttView.tsx`; the E1 write endpoints (`/tasks/{id}/move|resize|dependencies`) are ready to consume |
+| Editable Gantt workspace | **done (E2)** — custom timeline in `components/gantt/` (ADR-0004) consuming the E1 endpoints with optimistic updates + undo/redo |
 | Stronger AI assistant | new functions in `agent_tools.py` + schemas in `TOOLS` + `TOOL_FN_MAP` |
 | AI planner / simulator | new agent tools + a non-destructive "scenario" path over the scheduling module |
 | Explainable AI | `run_agent` returns rationale + confidence alongside `actions` |

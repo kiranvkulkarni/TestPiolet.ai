@@ -49,8 +49,10 @@ next to it.
   `tailwind-merge` + `lucide-react` icons + `react-hot-toast`.
 - Server state: **TanStack Query**. Client/auth state: **Zustand**. HTTP: **axios**.
 - Routing: `react-router-dom` v7. Charts: **Recharts**. Dates: `date-fns`.
-- Gantt (current): **`gantt-task-react`** — a read-only-ish library view. The editable
-  workspace USP will likely outgrow it (see ADR-0004).
+- Gantt (since E2): **custom editable timeline** in `components/gantt/`
+  (`GanttWorkspace.tsx` + pure `timeline.ts` + `useUndoStack.ts`) — drag/resize/link/
+  reassign/inline-edit/undo-redo, virtualized rows. `gantt-task-react` was removed
+  (ADR-0004).
 
 Full detail: `docs/ARCHITECTURE.md`. Never silently swap a library — that's an ADR.
 
@@ -80,7 +82,8 @@ frontend/src/
   store/             Zustand stores (authStore)
   pages/             Dashboard, Tasks, GanttView, TestRequests, Projects, Team,
                      Leaves, Reports, DeviceModels, Login
-  components/        agent/ChatWidget, layout/*, shared/*, tasks/*
+  components/        agent/ChatWidget, gantt/* (editable timeline), layout/*,
+                     shared/*, tasks/*
   types/             shared TS types    utils/  helpers
 ```
 

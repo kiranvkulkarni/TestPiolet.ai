@@ -1,57 +1,49 @@
 import { useQuery } from '@tanstack/react-query';
-import { Gantt, Task as GanttLibTask, ViewMode } from 'gantt-task-react';
-import { useMemo, useState } from 'react';
-import { projectsApi, tasksApi, usersApi } from '../api/endpoints';
+import { Flame, Redo2, Route, Undo2 } from 'lucide-react';
+import { useState } from 'react';
+import toast from 'react-hot-toast';
+import { projectsApi, usersApi } from '../api/endpoints';
+import { GanttWorkspace, type ColorBy } from '../components/gantt/GanttWorkspace';
+import type { Zoom } from '../components/gantt/timeline';
+import { useUndoStack } from '../components/gantt/useUndoStack';
 import { inputClass } from '../components/shared/Field';
 import { cn } from '../utils/cn';
-
-const STATUS_BAR_COLORS: Record<string, { color: string; selected: string }> = {
-  pending: { color: '#94a3b8', selected: '#64748b' },
-  in_progress: { color: '#3b82f6', selected: '#2563eb' },
-  blocked: { color: '#ef4444', selected: '#dc2626' },
-  completed: { color: '#22c55e', selected: '#16a34a' },
-  cancelled: { color: '#d4d4d8', selected: '#a1a1aa' },
-};
 
 export function GanttView() {
   const [projectId, setProjectId] = useState<number | undefined>();
   const [assigneeId, setAssigneeId] = useState<number | undefined>();
-  const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.Day);
+  const [zoom, setZoom] = useState<Zoom>('day');
+  const [colorBy, setColorBy] = useState<ColorBy>('status');
+  const [showCritical, setShowCritical] = useState(false);
+  const [showHeatmap, setShowHeatmap] = useState(false);
+  const undoStack = useUndoStack();
 
-  const { data: rows, isLoading } = useQuery({
-    queryKey: ['tasks', 'gantt', projectId, assigneeId],
-    queryFn: () => tasksApi.gantt({ project_id: projectId, assigned_to: assigneeId }),
-  });
   const { data: projects } = useQuery({ queryKey: ['projects'], queryFn: projectsApi.list });
   const { data: users } = useQuery({ queryKey: ['users'], queryFn: usersApi.list });
 
-  const ganttTasks: GanttLibTask[] = useMemo(
-    () =>
-      (rows ?? []).map((t) => {
-        const palette = STATUS_BAR_COLORS[t.status] ?? STATUS_BAR_COLORS.pending;
-        return {
-          id: String(t.id),
-          name: `${t.title}${t.assignee_name ? ` · ${t.assignee_name}` : ''}`,
-          start: new Date(t.start_date),
-          end: new Date(t.due_date),
-          progress: t.progress,
-          type: 'task' as const,
-          dependencies: t.depends_on ? [String(t.depends_on)] : [],
-          styles: {
-            backgroundColor: palette.color,
-            backgroundSelectedColor: palette.selected,
-            progressColor: t.project_color ?? '#6366f1',
-            progressSelectedColor: t.project_color ?? '#4f46e5',
-          },
-        };
-      }),
-    [rows],
-  );
-
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="mr-auto text-xl font-semibold">Gantt</h1>
+        <h1 className="mr-auto text-xl font-semibold">Gantt workspace</h1>
+        <button
+          onClick={() => void undoStack.undo().then((l) => l && toast(`Undid: ${l}`, { icon: '↩️' }))}
+          disabled={!undoStack.canUndo}
+          title="Undo (Ctrl+Z)"
+          aria-label="Undo"
+          className="rounded-lg border border-slate-300 p-1.5 text-slate-600 hover:bg-slate-50 disabled:opacity-30"
+        >
+          <Undo2 size={15} />
+        </button>
+        <button
+          onClick={() => void undoStack.redo().then((l) => l && toast(`Redid: ${l}`, { icon: '↪️' }))}
+          disabled={!undoStack.canRedo}
+          title="Redo (Ctrl+Y)"
+          aria-label="Redo"
+          className="rounded-lg border border-slate-300 p-1.5 text-slate-600 hover:bg-slate-50 disabled:opacity-30"
+        >
+          <Redo2 size={15} />
+        </button>
+
         <select
           className={cn(inputClass, 'w-44')}
           value={projectId ?? ''}
@@ -67,47 +59,76 @@ export function GanttView() {
           value={assigneeId ?? ''}
           onChange={(e) => setAssigneeId(e.target.value ? Number(e.target.value) : undefined)}
         >
-          <option value="">All assignees</option>
+          <option value="">Everyone</option>
           {(users ?? []).filter((u) => u.role !== 'viewer').map((u) => (
             <option key={u.id} value={u.id}>{u.name}</option>
           ))}
         </select>
+        <select
+          className={cn(inputClass, 'w-36')}
+          value={colorBy}
+          onChange={(e) => setColorBy(e.target.value as ColorBy)}
+          title="Color bars by"
+        >
+          <option value="status">Color: status</option>
+          <option value="priority">Color: priority</option>
+          <option value="assignee">Color: assignee</option>
+        </select>
         <div className="flex rounded-lg border border-slate-300 p-0.5">
-          {([ViewMode.Day, ViewMode.Week, ViewMode.Month] as const).map((m) => (
+          {(['day', 'week', 'month'] as const).map((z) => (
             <button
-              key={m}
-              onClick={() => setViewMode(m)}
+              key={z}
+              onClick={() => setZoom(z)}
               className={cn(
-                'rounded-md px-2.5 py-1 text-sm',
-                viewMode === m ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100',
+                'rounded-md px-2.5 py-1 text-sm capitalize',
+                zoom === z ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-100',
               )}
             >
-              {m}
+              {z}
             </button>
           ))}
         </div>
+        <button
+          onClick={() => setShowCritical((v) => !v)}
+          className={cn(
+            'flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm',
+            showCritical
+              ? 'border-red-300 bg-red-50 text-red-700'
+              : 'border-slate-300 text-slate-600 hover:bg-slate-50',
+          )}
+          title="Highlight the critical path"
+        >
+          <Route size={14} /> Critical path
+        </button>
+        <button
+          onClick={() => setShowHeatmap((v) => !v)}
+          className={cn(
+            'flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm',
+            showHeatmap
+              ? 'border-amber-300 bg-amber-50 text-amber-700'
+              : 'border-slate-300 text-slate-600 hover:bg-slate-50',
+          )}
+          title="Show workload heatmap per person"
+        >
+          <Flame size={14} /> Heatmap
+        </button>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white p-2">
-        {isLoading && <p className="p-4 text-sm text-slate-400">Loading…</p>}
-        {!isLoading && ganttTasks.length === 0 && (
-          <p className="p-8 text-center text-sm text-slate-400">
-            No scheduled tasks (tasks need both a start and a due date).
-          </p>
-        )}
-        {ganttTasks.length > 0 && (
-          <Gantt tasks={ganttTasks} viewMode={viewMode} listCellWidth="220px" columnWidth={viewMode === ViewMode.Month ? 200 : 60} />
-        )}
-      </div>
+      <GanttWorkspace
+        projectId={projectId}
+        assigneeId={assigneeId}
+        zoom={zoom}
+        colorBy={colorBy}
+        showCritical={showCritical}
+        showHeatmap={showHeatmap}
+        undoStack={undoStack}
+      />
 
-      <div className="flex flex-wrap gap-4 text-xs text-slate-500">
-        {Object.entries(STATUS_BAR_COLORS).map(([status, { color }]) => (
-          <span key={status} className="flex items-center gap-1.5 capitalize">
-            <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: color }} />
-            {status.replace('_', ' ')}
-          </span>
-        ))}
-      </div>
+      <p className="text-xs text-slate-400">
+        Drag a bar to move (drop on another person to reassign) · drag edges to resize · drag the
+        ○ handle onto a task to link · double-click a title to rename · right-click for more ·
+        Ctrl+click multi-select, ←/→ nudges selection · Ctrl+Z / Ctrl+Y undo/redo.
+      </p>
     </div>
   );
 }

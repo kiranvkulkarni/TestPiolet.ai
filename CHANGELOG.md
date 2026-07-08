@@ -1,5 +1,27 @@
 # Changelog
 
+## [Unreleased] — E2: editable Gantt workspace (USP #1)
+- **Custom timeline component** (ADR-0004 decided: build custom, `gantt-task-react`
+  removed): `components/gantt/GanttWorkspace.tsx` + pure `timeline.ts` +
+  `useUndoStack.ts`.
+- **Interactions**, all persisted through the E1 endpoints with optimistic updates
+  (reconcile on refetch, rollback + toast on error):
+  drag to move (drop on another person's section to reassign) · edge-drag resize
+  (left edge = move keep-due, right edge = resize) · dependency drawing from the
+  bar handle or the context menu (cycle 400s surfaced as toasts) · double-click
+  inline title rename (Enter/Esc) · right-click menu (Rename, Duplicate, Split,
+  Convert to milestone, Create dependency, Unlink …) · Ctrl+click multi-select with
+  bulk drag and ←/→ nudge · **undo/redo** command stack (Ctrl+Z / Ctrl+Y) on every
+  edit · day/week/month zoom · color-by status/priority/assignee ·
+  **critical-path highlight** (dims non-critical) · **workload heatmap** overlay
+  per assignee (overlapping active tasks per day) · milestone rendering (diamond).
+- **Performance:** rows grouped by assignee and manually virtualized (only the
+  visible window renders); weekend shading via CSS gradient; verified against a
+  seeded 450-task project (`python -m app.seed --large`), `/tasks/gantt` with 468
+  rows + CPM serves in ~0.3 s.
+- **API:** `GET /tasks/gantt` rows now include `dependency_edges`
+  (`{id, from_task_id}`) so the UI can unlink without an extra round-trip.
+
 ## [Unreleased] — E1: dependencies + scheduling engine (backend only)
 - **`task_dependencies` table** (ADR-0005): typed many-to-many edges
   (`finish_to_start`), unique per edge, cycles rejected. The migration copies

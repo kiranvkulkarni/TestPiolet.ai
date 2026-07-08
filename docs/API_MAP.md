@@ -27,7 +27,8 @@ Use this to find the endpoint to extend rather than inventing a new one.
 ## Tasks (the core)
 - `GET  /tasks` — list (filters).
 - `GET  /tasks/gantt` — Gantt-shaped payload (feeds `GanttView`); since E1 each row
-  carries `dependencies` (predecessor ids), `critical` and `slack_days`.
+  carries `dependencies` (predecessor ids), `critical` and `slack_days`; since E2 also
+  `dependency_edges` (`{id, from_task_id}` — the row id is what `DELETE …/dependencies/{dep_id}` needs).
 - `POST /tasks` · `POST /tasks/bulk` · `POST /tasks/bulk-update`
 - `GET  /tasks/{id}` · `PUT /tasks/{id}` · `PATCH /tasks/{id}/status` · `DELETE /tasks/{id}`
 - `GET  /tasks/{id}/leave-conflicts` — assignee leave overlap check.

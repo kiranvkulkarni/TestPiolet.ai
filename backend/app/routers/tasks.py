@@ -308,12 +308,16 @@ def gantt_tasks(
     # dependencies + critical path over the returned set (E1)
     ids = {t.id for t in rows}
     predecessors: dict[int, list[int]] = {}
+    edges: dict[int, list[schemas.GanttDependencyEdge]] = {}
     if ids:
         for dep in db.scalars(
             select(TaskDependency).where(TaskDependency.to_task_id.in_(ids))
         ).all():
             if dep.from_task_id in ids:
                 predecessors.setdefault(dep.to_task_id, []).append(dep.from_task_id)
+                edges.setdefault(dep.to_task_id, []).append(
+                    schemas.GanttDependencyEdge(id=dep.id, from_task_id=dep.from_task_id)
+                )
     schedule: dict[int, scheduling.ScheduledTask] = {}
     if rows:
         sched_tasks, deps, leaves = _scheduling_inputs(db, rows)
@@ -348,6 +352,7 @@ def gantt_tasks(
                 test_request_title=t.test_request.title if t.test_request else "",
                 depends_on=t.depends_on,
                 dependencies=sorted(predecessors.get(t.id, [])),
+                dependency_edges=sorted(edges.get(t.id, []), key=lambda e: e.from_task_id),
                 critical=sched.is_critical if sched else False,
                 slack_days=sched.slack_days if sched else 0,
             )

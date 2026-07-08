@@ -120,6 +120,11 @@ export interface Task {
   device_model: DeviceModel | null;
 }
 
+export interface GanttDependencyEdge {
+  id: number; // task_dependencies row id (needed to unlink)
+  from_task_id: number;
+}
+
 export interface GanttTask {
   id: number;
   title: string;
@@ -136,6 +141,22 @@ export interface GanttTask {
   test_request_id: number;
   test_request_title: string;
   depends_on: number | null;
+  dependencies: number[];
+  dependency_edges: GanttDependencyEdge[];
+  critical: boolean;
+  slack_days: number;
+}
+
+export interface RescheduleResult {
+  task: Task;
+  affected: Task[];
+  critical_path: number[];
+}
+
+export interface DependencyResult {
+  dependency: { id: number; from_task_id: number; to_task_id: number; type: string } | null;
+  affected: Task[];
+  critical_path: number[];
 }
 
 export interface Leave {
