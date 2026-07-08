@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .models import (
     AutomationType,
+    DependencyType,
     LeaveStatus,
     LeaveType,
     Priority,
@@ -277,7 +278,48 @@ class GanttTaskOut(BaseModel):
     project_color: str | None
     test_request_id: int
     test_request_title: str
-    depends_on: int | None
+    depends_on: int | None  # legacy single FK (deprecated; see dependencies)
+    dependencies: list[int] = []  # predecessor task ids (from task_dependencies)
+    critical: bool = False
+    slack_days: int = 0
+
+
+# ---------------------------------------------------------------------------
+# Dependencies & scheduling (E1)
+# ---------------------------------------------------------------------------
+
+class DependencyCreate(BaseModel):
+    depends_on_task_id: int  # the predecessor: it must finish before this task starts
+    type: DependencyType = DependencyType.finish_to_start
+
+
+class DependencyOut(ORMModel):
+    id: int
+    from_task_id: int
+    to_task_id: int
+    type: DependencyType
+
+
+class TaskMoveRequest(BaseModel):
+    start_date: date
+    keep_duration: bool = True
+
+
+class TaskResizeRequest(BaseModel):
+    due_date: date | None = None
+    duration_days: int | None = Field(default=None, ge=1)
+
+
+class RescheduleResult(BaseModel):
+    task: "TaskOut"
+    affected: list["TaskOut"]  # dependents that were shifted (excludes `task`)
+    critical_path: list[int]
+
+
+class DependencyResult(BaseModel):
+    dependency: DependencyOut | None = None
+    affected: list["TaskOut"] = []
+    critical_path: list[int] = []
 
 
 class LeaveConflictOut(BaseModel):
@@ -407,4 +449,6 @@ class AgentStatus(BaseModel):
 
 
 TokenResponse.model_rebuild()
+RescheduleResult.model_rebuild()
+DependencyResult.model_rebuild()
 

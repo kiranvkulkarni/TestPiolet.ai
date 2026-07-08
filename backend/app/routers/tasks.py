@@ -1,10 +1,11 @@
-from datetime import date
+import math
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from .. import schemas
+from .. import scheduling, schemas
 from ..auth import get_current_user, require_not_viewer
 from ..database import get_db
 from ..email_service import send_task_assigned_email
@@ -13,6 +14,7 @@ from ..models import (
     Leave,
     LeaveStatus,
     Task,
+    TaskDependency,
     TaskStatus,
     TestRequest,
     User,
@@ -64,6 +66,173 @@ def _apply_status(task: Task, new_status: TaskStatus) -> None:
 
 
 TASK_LOAD_OPTIONS = (selectinload(Task.assignee), selectinload(Task.device_model))
+
+HOURS_PER_DAY = 8.0
+
+
+# ---------------------------------------------------------------------------
+# Scheduling glue (ORM ↔ pure engine in app/scheduling.py)
+# ---------------------------------------------------------------------------
+
+def _approved_leave_days(db: Session, user_ids: set[int]) -> dict[int, frozenset[date]]:
+    """Expand approved leave ranges into per-user day sets."""
+    if not user_ids:
+        return {}
+    leaves = db.scalars(
+        select(Leave).where(Leave.user_id.in_(user_ids), Leave.status == LeaveStatus.approved)
+    ).all()
+    days: dict[int, set[date]] = {}
+    for lv in leaves:
+        day = lv.start_date
+        while day <= lv.end_date:
+            days.setdefault(lv.user_id, set()).add(day)
+            day += timedelta(days=1)
+    return {uid: frozenset(d) for uid, d in days.items()}
+
+
+def _duration_days(task: Task, calendar: frozenset[date]) -> int:
+    """Working-day duration: from the current span if dated, else from the estimate."""
+    if task.start_date and task.due_date and task.due_date >= task.start_date:
+        span = scheduling.count_working_days(task.start_date, task.due_date, calendar)
+        if span >= 1:
+            return span
+        # leave fully covers the current span — the amount of work is unchanged,
+        # so measure the span against weekends only
+        span = scheduling.count_working_days(task.start_date, task.due_date)
+        if span >= 1:
+            return span
+    if task.estimated_hours:
+        return max(1, math.ceil(task.estimated_hours / HOURS_PER_DAY))
+    return 1
+
+
+def _scheduling_inputs(
+    db: Session, tasks: list[Task]
+) -> tuple[list[scheduling.SchedTask], list[scheduling.Dependency], dict[int, frozenset[date]]]:
+    leaves = _approved_leave_days(db, {t.assigned_to for t in tasks if t.assigned_to})
+    sched_tasks = []
+    for t in tasks:
+        calendar = leaves.get(t.assigned_to, frozenset()) if t.assigned_to else frozenset()
+        sched_tasks.append(
+            scheduling.SchedTask(
+                id=t.id,
+                duration_days=_duration_days(t, calendar),
+                fixed_start=t.start_date,
+                assignee_id=t.assigned_to,
+            )
+        )
+    ids = {t.id for t in tasks}
+    dep_rows = db.scalars(
+        select(TaskDependency).where(
+            TaskDependency.from_task_id.in_(ids), TaskDependency.to_task_id.in_(ids)
+        )
+    ).all()
+    deps = [scheduling.Dependency(d.from_task_id, d.to_task_id) for d in dep_rows]
+    return sched_tasks, deps, leaves
+
+
+def _scope_tasks(db: Session, task: Task) -> list[Task]:
+    """The task plus everything connected to it through dependency edges."""
+    all_deps = db.scalars(select(TaskDependency)).all()
+    scope_ids = scheduling.dependency_closure(
+        task.id, [scheduling.Dependency(d.from_task_id, d.to_task_id) for d in all_deps]
+    )
+    return db.scalars(
+        select(Task).where(Task.id.in_(scope_ids)).options(*TASK_LOAD_OPTIONS)
+    ).all()
+
+
+def _push_and_persist(db: Session, task: Task, current_user: User) -> list[Task]:
+    """After `task`'s dates changed, shift violated dependents forward. Persists
+    the shifts with audit rows; caller commits. Returns the shifted tasks."""
+    scope = _scope_tasks(db, task)
+    sched_tasks, deps, leaves = _scheduling_inputs(db, scope)
+    spans = {
+        t.id: (t.start_date, t.due_date)
+        for t in scope
+        if t.start_date and t.due_date
+    }
+    if task.id not in spans:
+        return []
+    shifts = scheduling.push_dependents(sched_tasks, deps, spans, task.id, leaves)
+    by_id = {t.id: t for t in scope}
+    shifted: list[Task] = []
+    for shift in shifts:
+        dependent = by_id[shift.task_id]
+        write_audit(
+            db, "task", dependent.id, "update", current_user.id,
+            "start_date", str(dependent.start_date), str(shift.start),
+        )
+        write_audit(
+            db, "task", dependent.id, "update", current_user.id,
+            "due_date", str(dependent.due_date), str(shift.end),
+        )
+        dependent.start_date = shift.start
+        dependent.due_date = shift.end
+        shifted.append(dependent)
+    return shifted
+
+
+def _critical_path(db: Session, anchor: Task) -> list[int]:
+    """Critical path of the dated tasks in the anchor's dependency scope."""
+    scope = [t for t in _scope_tasks(db, anchor) if t.start_date and t.due_date]
+    if not scope:
+        return []
+    sched_tasks, deps, leaves = _scheduling_inputs(db, scope)
+    try:
+        result = scheduling.compute_schedule(
+            sched_tasks, deps, project_start=min(t.start_date for t in scope), leaves=leaves
+        )
+    except scheduling.CycleError:
+        return []
+    return result.critical_path
+
+
+def _mirror_legacy_depends_on(
+    db: Session, task_id: int, old: int | None, new: int | None
+) -> None:
+    """Keep task_dependencies in sync when the deprecated Task.depends_on column
+    is written through the legacy task endpoints (ADR-0005)."""
+    if old == new:
+        return
+    if old:
+        stale = db.scalar(
+            select(TaskDependency).where(
+                TaskDependency.from_task_id == old, TaskDependency.to_task_id == task_id
+            )
+        )
+        if stale:
+            db.delete(stale)
+    if new:
+        _validate_new_edge(db, from_task_id=new, to_task_id=task_id, allow_existing=True)
+        exists = db.scalar(
+            select(TaskDependency).where(
+                TaskDependency.from_task_id == new, TaskDependency.to_task_id == task_id
+            )
+        )
+        if not exists:
+            db.add(TaskDependency(from_task_id=new, to_task_id=task_id))
+
+
+def _validate_new_edge(
+    db: Session, from_task_id: int, to_task_id: int, allow_existing: bool = False
+) -> None:
+    if from_task_id == to_task_id:
+        raise HTTPException(status_code=400, detail="A task cannot depend on itself")
+    if db.get(Task, from_task_id) is None:
+        raise HTTPException(status_code=404, detail=f"Task {from_task_id} not found")
+    existing = db.scalars(select(TaskDependency)).all()
+    if not allow_existing and any(
+        d.from_task_id == from_task_id and d.to_task_id == to_task_id for d in existing
+    ):
+        raise HTTPException(status_code=409, detail="This dependency already exists")
+    edges = [scheduling.Dependency(d.from_task_id, d.to_task_id) for d in existing]
+    ids = list({from_task_id, to_task_id, *(e.from_task_id for e in edges), *(e.to_task_id for e in edges)})
+    if scheduling.would_create_cycle(ids, edges, scheduling.Dependency(from_task_id, to_task_id)):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Dependency {from_task_id} → {to_task_id} would create a cycle",
+        )
 
 
 @router.get("", response_model=list[schemas.TaskOut])
@@ -134,9 +303,33 @@ def gantt_tasks(
         TaskStatus.completed: 100.0,
         TaskStatus.cancelled: 0.0,
     }
+    rows = db.scalars(query).all()
+
+    # dependencies + critical path over the returned set (E1)
+    ids = {t.id for t in rows}
+    predecessors: dict[int, list[int]] = {}
+    if ids:
+        for dep in db.scalars(
+            select(TaskDependency).where(TaskDependency.to_task_id.in_(ids))
+        ).all():
+            if dep.from_task_id in ids:
+                predecessors.setdefault(dep.to_task_id, []).append(dep.from_task_id)
+    schedule: dict[int, scheduling.ScheduledTask] = {}
+    if rows:
+        sched_tasks, deps, leaves = _scheduling_inputs(db, rows)
+        try:
+            schedule = scheduling.compute_schedule(
+                sched_tasks, deps,
+                project_start=min(t.start_date for t in rows),
+                leaves=leaves,
+            ).tasks
+        except scheduling.CycleError:
+            schedule = {}
+
     out = []
-    for t in db.scalars(query).all():
+    for t in rows:
         project = t.test_request.project if t.test_request else None
+        sched = schedule.get(t.id)
         out.append(
             schemas.GanttTaskOut(
                 id=t.id,
@@ -154,6 +347,9 @@ def gantt_tasks(
                 test_request_id=t.test_request_id,
                 test_request_title=t.test_request.title if t.test_request else "",
                 depends_on=t.depends_on,
+                dependencies=sorted(predecessors.get(t.id, [])),
+                critical=sched.is_critical if sched else False,
+                slack_days=sched.slack_days if sched else 0,
             )
         )
     return out
@@ -170,6 +366,8 @@ def create_task(
     task = Task(**data, created_by=current_user.id)
     db.add(task)
     db.flush()
+    if task.depends_on:
+        _mirror_legacy_depends_on(db, task.id, None, task.depends_on)
     write_audit(db, "task", task.id, "create", current_user.id, new_value=task.title)
     _notify_assignment(db, task, current_user)
     db.commit()
@@ -190,6 +388,8 @@ def create_tasks_bulk(
         task = Task(**data, created_by=current_user.id)
         db.add(task)
         db.flush()
+        if task.depends_on:
+            _mirror_legacy_depends_on(db, task.id, None, task.depends_on)
         write_audit(db, "task", task.id, "create", current_user.id, new_value=task.title)
         _notify_assignment(db, task, current_user)
         tasks.append(task)
@@ -246,6 +446,8 @@ def update_task(
     _validate_refs(db, data)
     if data.get("depends_on") == task.id:
         raise HTTPException(status_code=400, detail="A task cannot depend on itself")
+    if "depends_on" in data and data["depends_on"] != task.depends_on:
+        _mirror_legacy_depends_on(db, task.id, task.depends_on, data["depends_on"])
     for field, value in data.items():
         old = getattr(task, field)
         if old != value:
@@ -330,3 +532,152 @@ def task_leave_conflicts(
         for lv in leaves
     ]
     return schemas.LeaveConflictOut(has_conflict=bool(conflicts), conflicts=conflicts)
+
+
+# ---------------------------------------------------------------------------
+# Scheduling write endpoints (E1) — consumed by the Gantt workspace in E2
+# ---------------------------------------------------------------------------
+
+def _task_calendar(db: Session, task: Task) -> frozenset[date]:
+    if not task.assigned_to:
+        return frozenset()
+    return _approved_leave_days(db, {task.assigned_to}).get(task.assigned_to, frozenset())
+
+
+def _set_dates(
+    db: Session, task: Task, new_start: date, new_due: date, current_user: User
+) -> None:
+    for field, value in (("start_date", new_start), ("due_date", new_due)):
+        old = getattr(task, field)
+        if old != value:
+            write_audit(db, "task", task.id, "update", current_user.id, field, str(old), str(value))
+            setattr(task, field, value)
+
+
+def _reschedule_result(
+    db: Session, task: Task, affected: list[Task]
+) -> schemas.RescheduleResult:
+    db.commit()
+    db.refresh(task)
+    for t in affected:
+        db.refresh(t)
+    return schemas.RescheduleResult(
+        task=schemas.TaskOut.model_validate(task),
+        affected=[schemas.TaskOut.model_validate(t) for t in affected],
+        critical_path=_critical_path(db, task),
+    )
+
+
+@router.patch("/{task_id}/move", response_model=schemas.RescheduleResult)
+def move_task(
+    task_id: int,
+    body: schemas.TaskMoveRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_not_viewer),
+):
+    """Move a task to a new start date (snapped to the assignee's working
+    calendar). Violated dependents are pushed forward, never pulled earlier."""
+    task = _get_or_404(db, task_id)
+    calendar = _task_calendar(db, task)
+    duration = _duration_days(task, calendar)
+    new_start, spanned_due = scheduling.task_span(body.start_date, duration, calendar)
+    if body.keep_duration or task.due_date is None:
+        new_due = spanned_due
+    else:
+        if task.due_date < new_start:
+            raise HTTPException(
+                status_code=400,
+                detail="New start is after the current due date; use keep_duration or resize",
+            )
+        new_due = task.due_date
+    _set_dates(db, task, new_start, new_due, current_user)
+    affected = _push_and_persist(db, task, current_user)
+    return _reschedule_result(db, task, affected)
+
+
+@router.patch("/{task_id}/resize", response_model=schemas.RescheduleResult)
+def resize_task(
+    task_id: int,
+    body: schemas.TaskResizeRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_not_viewer),
+):
+    """Change a task's duration by setting a new due date or a working-day count."""
+    task = _get_or_404(db, task_id)
+    if (body.due_date is None) == (body.duration_days is None):
+        raise HTTPException(status_code=400, detail="Provide exactly one of due_date or duration_days")
+    if task.start_date is None:
+        raise HTTPException(status_code=400, detail="Task has no start date; move it first")
+    calendar = _task_calendar(db, task)
+    if body.duration_days is not None:
+        new_due = scheduling.add_working_days(task.start_date, body.duration_days - 1, calendar)
+    else:
+        if body.due_date < task.start_date:
+            raise HTTPException(status_code=400, detail="due_date must be on or after start_date")
+        new_due = body.due_date
+    _set_dates(db, task, task.start_date, new_due, current_user)
+    affected = _push_and_persist(db, task, current_user)
+    return _reschedule_result(db, task, affected)
+
+
+@router.post(
+    "/{task_id}/dependencies", response_model=schemas.DependencyResult, status_code=201
+)
+def add_dependency(
+    task_id: int,
+    body: schemas.DependencyCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_not_viewer),
+):
+    """Link a predecessor: `depends_on_task_id` must finish before this task starts.
+    Cycles are rejected with 400; duplicates with 409."""
+    task = _get_or_404(db, task_id)
+    _validate_new_edge(db, from_task_id=body.depends_on_task_id, to_task_id=task_id)
+    dep = TaskDependency(
+        from_task_id=body.depends_on_task_id, to_task_id=task_id, type=body.type
+    )
+    db.add(dep)
+    db.flush()
+    write_audit(
+        db, "task_dependency", dep.id, "create", current_user.id,
+        new_value=f"{dep.from_task_id} -> {dep.to_task_id}",
+    )
+    predecessor = db.get(Task, body.depends_on_task_id)
+    affected = _push_and_persist(db, predecessor, current_user)
+    db.commit()
+    db.refresh(dep)
+    for t in affected:
+        db.refresh(t)
+    return schemas.DependencyResult(
+        dependency=schemas.DependencyOut.model_validate(dep),
+        affected=[schemas.TaskOut.model_validate(t) for t in affected],
+        critical_path=_critical_path(db, task),
+    )
+
+
+@router.delete("/{task_id}/dependencies/{dep_id}", response_model=schemas.DependencyResult)
+def remove_dependency(
+    task_id: int,
+    dep_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_not_viewer),
+):
+    """Unlink a dependency edge touching this task. Dates are left as they are
+    (removing a constraint never forces a reschedule)."""
+    task = _get_or_404(db, task_id)
+    dep = db.get(TaskDependency, dep_id)
+    if dep is None or task_id not in (dep.from_task_id, dep.to_task_id):
+        raise HTTPException(status_code=404, detail="Dependency not found on this task")
+    write_audit(
+        db, "task_dependency", dep.id, "delete", current_user.id,
+        old_value=f"{dep.from_task_id} -> {dep.to_task_id}",
+    )
+    # keep the deprecated column consistent if it mirrored this edge
+    to_task = db.get(Task, dep.to_task_id)
+    if to_task and to_task.depends_on == dep.from_task_id:
+        to_task.depends_on = None
+    db.delete(dep)
+    db.commit()
+    return schemas.DependencyResult(
+        dependency=None, affected=[], critical_path=_critical_path(db, task)
+    )

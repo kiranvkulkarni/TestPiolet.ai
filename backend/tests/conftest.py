@@ -3,11 +3,13 @@
 from datetime import date, timedelta
 
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.database import Base
+from app.auth import get_current_user
+from app.database import Base, get_db
 from app.models import (
     DeviceModel,
     Leave,
@@ -125,3 +127,16 @@ def seeded(db: Session) -> dict:
         "tasks": tasks,
         "leave": leave,
     }
+
+
+@pytest.fixture()
+def client(db: Session, seeded: dict):
+    """TestClient wired to the in-memory DB, authenticated as the manager."""
+    from app.main import app
+
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: seeded["manager"]
+    try:
+        yield TestClient(app)
+    finally:
+        app.dependency_overrides.clear()

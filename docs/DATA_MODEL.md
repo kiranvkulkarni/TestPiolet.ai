@@ -14,7 +14,9 @@ Project
         └── Task         (belongs to a TestRequest)
               ├── Comment
               ├── Attachment
-              └── depends_on → Task   (single self-FK today)
+              └── TaskDependency (typed edges, many-to-many; source of truth
+                                  since E1 — the old depends_on self-FK is
+                                  deprecated and mirrored; see ADR-0005)
 DeviceModel → Task       (a task can target one device)
 User        → Task        (assignee, creator), Leave, Comment, Notification
 ```
@@ -66,14 +68,19 @@ erDiagram
 - **RequestStatus:** `open` · `in_progress` · `completed` · `cancelled`
 - **LeaveType:** `planned` · `sick` · `emergency` · `comp_off`
 - **LeaveStatus:** `pending` · `approved` · `rejected`
+- **DependencyType:** `finish_to_start` (only type today; the table is ready for more)
 
 ## Notes & known limits (evolution targets)
 
-- **Dependencies are minimal:** a single `Task.depends_on` self-FK. Real critical-path
-  scheduling and the Gantt workspace want many-to-many, typed dependencies — introduce a
-  `task_dependencies` table when that milestone lands (ADR it).
-- **No scheduling fields beyond dates/estimates** — a pure scheduling module will compute
-  derived start/end and critical path; don't overwrite user-set dates without care.
+- **Dependencies (since E1):** `task_dependencies` (`from_task_id` → `to_task_id`,
+  typed, unique per edge, cycles rejected) is the source of truth. `Task.depends_on`
+  is deprecated: reads should ignore it; legacy writes are mirrored into the table
+  (ADR-0005). Drop it once nothing writes it (post-E3).
+- **Scheduling (since E1):** `app/scheduling.py` (framework-free) computes derived
+  start/end, slack and the critical path from durations + dependencies + working
+  calendars (weekends + approved leave). Stored dates remain user-owned: the
+  move/resize/link endpoints only push *violated* dependents forward, never pull
+  dates earlier.
 - **AuditLog exists but isn't uniformly written** — standardize writing it on mutations,
   including AI actions, as part of the Explainable-AI work.
 - **Scenarios (what-if)** have no storage yet — the Simulator milestone adds a scenario

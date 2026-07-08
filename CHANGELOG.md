@@ -1,5 +1,26 @@
 # Changelog
 
+## [Unreleased] — E1: dependencies + scheduling engine (backend only)
+- **`task_dependencies` table** (ADR-0005): typed many-to-many edges
+  (`finish_to_start`), unique per edge, cycles rejected. The migration copies
+  legacy `Task.depends_on` values into the table; the column is deprecated —
+  legacy writes are mirrored into the table, reads use only the table.
+- **`app/scheduling.py`** — pure, framework-free engine: working-day calendars
+  (weekends + approved leave per assignee), deterministic topological order,
+  forward/backward pass (CPM) with slack + critical path, `would_create_cycle`,
+  and a conservative `push_dependents` that only shifts *violated* dependents
+  forward (user-set dates are never pulled earlier).
+- **New endpoints** on `/tasks` (each returns the task, pushed dependents, and
+  the recomputed critical path): `PATCH /{id}/move`, `PATCH /{id}/resize`,
+  `POST /{id}/dependencies` (400 cycle / 409 duplicate),
+  `DELETE /{id}/dependencies/{dep_id}`.
+- **`GET /tasks/gantt`** now includes `dependencies` (predecessor ids),
+  `critical`, and `slack_days` per row.
+- **Tests:** +43 (27 engine unit tests: chains, parallel paths, weekends, leave
+  gaps, determinism, cycles; 16 API tests: cycle 4xx, push-on-move/resize,
+  leave-aware snapping, legacy mirroring, gantt enrichment). Suite: 69 green.
+- No frontend change (E2 consumes this).
+
 ## [Unreleased] — E0: harden the baseline
 - **Alembic migrations** (ADR-0003 accepted): `backend/alembic/` with a baseline
   revision generated from `models.py` (verified drift-free via `alembic check`).

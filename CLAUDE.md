@@ -65,6 +65,7 @@ backend/app/
   schemas.py         Pydantic request/response schemas
   auth.py            password hashing, JWT, current-user dependencies
   utils.py           write_audit + create_notification helpers
+  scheduling.py      pure CPM engine: topo order, calendars, critical path (E1)
   agent_engine.py    LLM tool-calling loop (TOOLS, TOOL_FN_MAP, SYSTEM_PROMPT, run_agent)
   agent_tools.py     the actual tool functions (query + mutate the DB)
   email_service.py   optional SMTP notifications
@@ -87,9 +88,11 @@ frontend/src/
 
 `Project → TestCycle (optional) → TestRequest → Task`. A `Task` has a type (15 QA types:
 functional/nonfunc/compliance), status, priority, automation type, dates, estimate,
-device, and a single `depends_on` FK. Plus `DeviceModel`, `Leave`, `User`
-(manager/tester/viewer), `Comment`, `Attachment`, `AuditLog`, `Notification`.
-Integer primary keys. Canonical detail + enums: `docs/DATA_MODEL.md`.
+device, and typed many-to-many dependencies via `TaskDependency` (the old single
+`depends_on` FK is deprecated/mirrored — ADR-0005). Scheduling math (critical path,
+working calendars) lives in the framework-free `app/scheduling.py`. Plus `DeviceModel`,
+`Leave`, `User` (manager/tester/viewer), `Comment`, `Attachment`, `AuditLog`,
+`Notification`. Integer primary keys. Canonical detail + enums: `docs/DATA_MODEL.md`.
 
 ## The AI agent (what exists)
 

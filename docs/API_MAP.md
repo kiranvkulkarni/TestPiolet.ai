@@ -26,10 +26,16 @@ Use this to find the endpoint to extend rather than inventing a new one.
 
 ## Tasks (the core)
 - `GET  /tasks` — list (filters).
-- `GET  /tasks/gantt` — Gantt-shaped payload (feeds `GanttView`).
+- `GET  /tasks/gantt` — Gantt-shaped payload (feeds `GanttView`); since E1 each row
+  carries `dependencies` (predecessor ids), `critical` and `slack_days`.
 - `POST /tasks` · `POST /tasks/bulk` · `POST /tasks/bulk-update`
 - `GET  /tasks/{id}` · `PUT /tasks/{id}` · `PATCH /tasks/{id}/status` · `DELETE /tasks/{id}`
 - `GET  /tasks/{id}/leave-conflicts` — assignee leave overlap check.
+- Scheduling (E1; each returns the task, the pushed dependents, and the critical path):
+  `PATCH /tasks/{id}/move` (new start; snaps to the assignee's working calendar),
+  `PATCH /tasks/{id}/resize` (new due date **or** working-day duration),
+  `POST /tasks/{id}/dependencies` (link a predecessor; 400 on cycle, 409 on duplicate),
+  `DELETE /tasks/{id}/dependencies/{dep_id}` (unlink; never reschedules).
 - Comments: `GET|POST /tasks/{id}/comments`, `PUT|DELETE /tasks/{id}/comments/{comment_id}`.
 - Attachments: `GET|POST /tasks/{id}/attachments`,
   `GET /tasks/{id}/attachments/{att_id}/download`, `DELETE /tasks/{id}/attachments/{att_id}`.

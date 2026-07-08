@@ -82,8 +82,8 @@ sequenceDiagram
 
 | Capability (target) | Attaches at |
 |---------------------|-------------|
-| Real dependencies + critical path | new dependency storage + a pure scheduling module in `backend/app/` (framework-free), fed by `models` |
-| Editable Gantt workspace | replace/augment `GanttView.tsx`; new write endpoints on `/tasks` (move/resize/link) |
+| Real dependencies + critical path | **done (E1)** — `task_dependencies` table (ADR-0005) + framework-free `app/scheduling.py` (CPM, working calendars, cycle rejection) |
+| Editable Gantt workspace | replace/augment `GanttView.tsx`; the E1 write endpoints (`/tasks/{id}/move|resize|dependencies`) are ready to consume |
 | Stronger AI assistant | new functions in `agent_tools.py` + schemas in `TOOLS` + `TOOL_FN_MAP` |
 | AI planner / simulator | new agent tools + a non-destructive "scenario" path over the scheduling module |
 | Explainable AI | `run_agent` returns rationale + confidence alongside `actions` |

@@ -11,6 +11,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -98,6 +99,10 @@ class LeaveStatus(str, enum.Enum):
     pending = "pending"
     approved = "approved"
     rejected = "rejected"
+
+
+class DependencyType(str, enum.Enum):
+    finish_to_start = "finish_to_start"
 
 
 def _enum(e: type[enum.Enum]) -> Enum:
@@ -240,6 +245,30 @@ class Task(Base, TimestampMixin):
     attachments: Mapped[list["Attachment"]] = relationship(
         back_populates="task", cascade="all, delete-orphan"
     )
+
+
+class TaskDependency(Base):
+    """Typed dependency edge: `from_task` must finish before `to_task` starts.
+
+    Source of truth for dependencies since E1 (ADR-0005). The legacy
+    `Task.depends_on` column is deprecated and mirrored here on write.
+    """
+
+    __tablename__ = "task_dependencies"
+    __table_args__ = (
+        UniqueConstraint("from_task_id", "to_task_id", name="uq_task_dependency_edge"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    from_task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id"))
+    to_task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id"))
+    type: Mapped[DependencyType] = mapped_column(
+        _enum(DependencyType), default=DependencyType.finish_to_start
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    from_task: Mapped["Task"] = relationship(foreign_keys=[from_task_id])
+    to_task: Mapped["Task"] = relationship(foreign_keys=[to_task_id])
 
 
 class Leave(Base, TimestampMixin):
