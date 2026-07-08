@@ -1,0 +1,6 @@
+@import 'tailwindcss';
+@import 'gantt-task-react/dist/index.css';
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased;
+}
