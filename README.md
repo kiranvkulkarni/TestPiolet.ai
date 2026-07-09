@@ -29,7 +29,8 @@ Default logins (from seed): manager `admin@qa.local` / `admin123`; testers
 `<first-name>@qa.local` / `tester123` (e.g. `priya@qa.local`).
 
 The AI agent is **off** until you set `AGENT_ENABLED=true` in `backend/.env` and have a
-local LLM reachable at `LLM_BASE_URL` (e.g. `ollama serve` with `LLM_MODEL=llama3.1`).
+local LLM reachable at `LLM_BASE_URL` (e.g. `ollama serve` with `LLM_MODEL=qwen2.5:7b` —
+a tool-calling-capable model is required; see the model-choice note in `docs/USER_GUIDE.md`).
 
 ## Where everything is
 

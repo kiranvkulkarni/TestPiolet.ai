@@ -88,12 +88,18 @@ The AI features (chat assistant, Planner) are **off by default**. In `backend/.e
 ```ini
 AGENT_ENABLED=true
 LLM_BASE_URL=http://localhost:11434/v1   # Ollama default
-LLM_MODEL=llama3.1
+LLM_MODEL=qwen2.5:7b
 LLM_API_KEY=ollama                        # any non-empty string for Ollama
 ```
 
-Then run your model (`ollama run llama3.1`) and restart the backend. The chat widget
+Then pull the model (`ollama pull qwen2.5:7b`) and restart the backend. The chat widget
 header shows the connection state; `GET /agent/status` reports it programmatically.
+
+**Model choice matters.** The agent needs a model that supports **native tool calling**
+and follows multi-step plans. Tested on an 8 GB GPU: `qwen2.5:7b` handles the full tool
+loop reliably (recommended); `llama3.1:8b` manages single-tool queries but derails on
+multi-step chains; plain `llama3` has no tool support at all. Pick a model that fits
+entirely in VRAM — partial CPU/GPU offload is slow and fragile on some architectures.
 The **Simulator** and all REST mirrors work *without* an LLM — only free-text
 drafting (chat + `POST /agent/plan`) needs one.
 
