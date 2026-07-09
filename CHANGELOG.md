@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased] — Rebrand: TestPilot.ai
+- Renamed the product from "QA Task Assigner" to **TestPilot.ai** ("Ship with
+  confidence"). Updated: browser tab title + new favicon (indigo square,
+  `PlaneTakeoff` glyph — pilot the schedule, launch the release), sidebar logo
+  mark + wordmark, login screen logo + heading + tagline, FastAPI app title/
+  description, `frontend/package.json` name (`testpilot-ai`), and the
+  README/CLAUDE.md headers and product descriptions.
+- Cosmetic only — no functional, schema, or API changes.
+
 ## [Unreleased] — Agent robustness for small local models
 - `agent_engine.parse_textual_tool_call`: recovers tool calls that small local
   models (observed with llama3.1:8b) write as **text** instead of using the

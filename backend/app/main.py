@@ -22,7 +22,11 @@ from .routers import (
 
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="QA Task Assigner", version="1.0.0")
+app = FastAPI(
+    title="TestPilot.ai",
+    description="AI-native QA operations — plan, schedule, and pilot test work with an explainable, on-prem AI copilot.",
+    version="1.0.0",
+)
 
 app.add_middleware(
     CORSMiddleware,

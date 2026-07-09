@@ -1,3 +1,4 @@
+import { PlaneTakeoff } from 'lucide-react';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
@@ -34,12 +35,14 @@ export function Login() {
         className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-8 shadow-sm"
       >
         <div className="mb-6 flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 font-bold text-white">
-            QA
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white">
+            <PlaneTakeoff size={20} />
           </span>
           <div>
-            <h1 className="font-semibold">QA Task Assigner</h1>
-            <p className="text-xs text-slate-500">Samsung Android QA · on-prem AI</p>
+            <h1 className="font-semibold">
+              TestPilot<span className="text-indigo-600">.ai</span>
+            </h1>
+            <p className="text-xs text-slate-500">Ship with confidence · on-prem AI for QA</p>
           </div>
         </div>
         <div className="space-y-3">

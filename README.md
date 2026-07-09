@@ -1,13 +1,15 @@
-# QA Task Assigner
+# TestPilot.ai
+
+*Ship with confidence.*
 
 A web app for **Samsung Android QA teams** to manage test tasks, track leave, view
-timelines, and report progress — with a **built-in AI agent** (floating chat) that
+timelines, and report progress — with a **built-in AI copilot** (floating chat) that
 assigns tasks, checks workload, updates statuses, and drafts plans in natural language,
 powered by a **fully on-premises LLM** (Ollama / Samsung Gauss / Intel OpenVINO via an
 OpenAI-compatible API).
 
 **Stack:** FastAPI · SQLAlchemy 2.0 · SQLite/PostgreSQL · React 19 · Vite · TypeScript ·
-Tailwind v4 · TanStack Query · Zustand · Radix UI · Recharts · gantt-task-react.
+Tailwind v4 · TanStack Query · Zustand · Radix UI · Recharts.
 
 ## Run it
 

@@ -7,6 +7,7 @@ import {
   GanttChartSquare,
   Inbox,
   LayoutDashboard,
+  PlaneTakeoff,
   Smartphone,
   Sparkles,
   Users,
@@ -32,10 +33,12 @@ export function Sidebar() {
   return (
     <aside className="flex w-56 shrink-0 flex-col border-r border-slate-200 bg-white">
       <div className="flex h-14 items-center gap-2 border-b border-slate-200 px-4">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-sm font-bold text-white">
-          QA
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-white">
+          <PlaneTakeoff size={17} />
         </span>
-        <span className="font-semibold">Task Assigner</span>
+        <span className="font-semibold">
+          TestPilot<span className="text-indigo-600">.ai</span>
+        </span>
       </div>
       <nav className="flex-1 space-y-0.5 overflow-y-auto p-2">
         {NAV.map(({ to, label, icon: Icon }) => (

@@ -7,12 +7,14 @@
 
 ## What this project is
 
-**QA Task Assigner** — a web app for **Samsung Android QA teams** to manage test tasks,
-track leave, view timelines, and report progress, replacing ad-hoc Excel management. It
-already works and is fairly complete. It ships with a **built-in AI agent** (floating
-chat) that assigns tasks, checks workload, updates statuses, and drafts test plans in
-natural language, powered by a **fully on-premises LLM** (Ollama / Samsung Gauss / Intel
-OpenVINO via an OpenAI-compatible API).
+**TestPilot.ai** ("Ship with confidence") — a web app for **Samsung Android QA teams**
+to manage test tasks, track leave, view timelines, and report progress, replacing
+ad-hoc Excel management. It already works and is fairly complete. It ships with a
+**built-in AI copilot** (floating chat) that assigns tasks, checks workload, updates
+statuses, and drafts test plans in natural language, powered by a **fully
+on-premises LLM** (Ollama / Samsung Gauss / Intel OpenVINO via an OpenAI-compatible
+API). Internally the codebase/repo may still say `TestPiolet.ai` or "QA Task
+Assigner" in older docs and file paths — same project, current brand is TestPilot.ai.
 
 **North star ("QAOS"):** evolve this from a task tracker into an *AI-native QA operating
 system* — the schedule becomes a live model the AI can plan, operate, and stress-test.
