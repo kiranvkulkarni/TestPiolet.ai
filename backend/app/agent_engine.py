@@ -51,7 +51,11 @@ respect working calendars and return an explanation.
 8. If a request is ambiguous, ask ONE clarifying question instead of guessing.
 
 Write tools return a rationale and confidence — repeat the key facts from the rationale \
-in your reply so the user knows what changed and why. Be concise. Dates are YYYY-MM-DD."""
+in your reply so the user knows what changed and why. Be concise. Dates are YYYY-MM-DD.
+
+CRITICAL: call tools ONLY through the native tool-calling mechanism. NEVER write a tool \
+call as JSON or code in your reply text, and never invent ids — look them up with the \
+read tools first."""
 
 
 TOOLS = [
@@ -402,6 +406,79 @@ def _client() -> OpenAI:
     return OpenAI(base_url=settings.LLM_BASE_URL, api_key=settings.LLM_API_KEY)
 
 
+def parse_textual_tool_call(content: str | None) -> tuple[str, dict] | None:
+    """Recover a tool call that a small local model wrote as JSON text instead of
+    using the native tool-calling mechanism (a common llama-8B failure mode),
+    e.g.:  {"name": "get_tasks", "parameters": {"status": "pending"}}.
+
+    Returns (tool_name, args) for a known tool, else None. String-encoded nested
+    JSON in argument values (another common slip) is decoded defensively.
+    """
+    if not content:
+        return None
+    # style 2: a bare python-ish call like `get_workload_summary()` or
+    # `get_tasks({"status": "pending"})` on its own
+    for name in TOOL_FN_MAP:
+        marker = f"{name}("
+        idx = content.find(marker)
+        if idx == -1:
+            continue
+        rest = content[idx + len(marker):]
+        close = rest.find(")")
+        if close == -1:
+            continue
+        inner = rest[:close].strip()
+        args: dict = {}
+        if inner.startswith("{"):
+            try:
+                parsed = json.loads(inner)
+                if isinstance(parsed, dict):
+                    args = parsed
+            except json.JSONDecodeError:
+                pass
+        return name, args
+    if '"name"' not in content:
+        return None
+    # style 1: a JSON object like {"name": "...", "parameters": {...}}
+    for start in [i for i, c in enumerate(content) if c == "{"]:
+        depth = 0
+        for end in range(start, len(content)):
+            if content[end] == "{":
+                depth += 1
+            elif content[end] == "}":
+                depth -= 1
+                if depth == 0:
+                    candidate = content[start : end + 1]
+                    if '"name"' not in candidate:
+                        break
+                    try:
+                        obj = json.loads(candidate)
+                    except json.JSONDecodeError:
+                        break
+                    if not isinstance(obj, dict):
+                        break
+                    name = obj.get("name")
+                    if name not in TOOL_FN_MAP:
+                        break
+                    args = obj.get("parameters") or obj.get("arguments") or {}
+                    if isinstance(args, str):
+                        try:
+                            args = json.loads(args)
+                        except json.JSONDecodeError:
+                            args = {}
+                    if not isinstance(args, dict):
+                        args = {}
+                    for key, value in list(args.items()):
+                        if isinstance(value, str) and value[:1] in "[{":
+                            try:
+                                args[key] = json.loads(value)
+                            except json.JSONDecodeError:
+                                pass
+                    return str(name), args
+        # only the first balanced candidate containing "name" is considered per start
+    return None
+
+
 def check_llm() -> bool:
     """Cheap reachability probe for /agent/status."""
     try:
@@ -427,7 +504,37 @@ def run_agent(
     explanation: list[dict] = []
     pending_confirmation = False
 
-    for _ in range(MAX_ITERATIONS):
+    def dispatch(name: str, args: dict) -> dict:
+        nonlocal pending_confirmation
+        fn = TOOL_FN_MAP.get(name)
+        if fn is None:
+            return {"error": f"unknown tool '{name}'"}
+        try:
+            if name in WRITE_TOOLS:
+                result = fn(db, current_user_id=current_user_id, **args)
+            else:
+                result = fn(db, **args)
+        except Exception:
+            logger.exception("Agent tool %s failed", name)
+            db.rollback()
+            result = {"error": f"tool '{name}' failed unexpectedly"}
+
+        if name in WRITE_TOOLS and "error" not in result:
+            if result.get("needs_confirmation"):
+                pending_confirmation = True
+            else:
+                actions.append({"tool": name, "args": args, "result": result})
+                if "rationale" in result:
+                    explanation.append(
+                        {
+                            "tool": name,
+                            "rationale": result["rationale"],
+                            "confidence": result.get("confidence"),
+                        }
+                    )
+        return result
+
+    for iteration in range(MAX_ITERATIONS):
         response = client.chat.completions.create(
             model=settings.LLM_MODEL,
             messages=convo,
@@ -438,7 +545,35 @@ def run_agent(
         message = response.choices[0].message
 
         if not message.tool_calls:
-            return message.content or "", actions, explanation, pending_confirmation
+            # small local models sometimes write the tool call as JSON text
+            # instead of using the tool-calling mechanism — recover it
+            textual = parse_textual_tool_call(message.content)
+            if textual is None:
+                return message.content or "", actions, explanation, pending_confirmation
+            name, args = textual
+            call_id = f"textual_{iteration}"
+            convo.append(
+                {
+                    "role": "assistant",
+                    "content": message.content,
+                    "tool_calls": [
+                        {
+                            "id": call_id,
+                            "type": "function",
+                            "function": {"name": name, "arguments": json.dumps(args)},
+                        }
+                    ],
+                }
+            )
+            result = dispatch(name, args)
+            convo.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "content": json.dumps(result, default=str),
+                }
+            )
+            continue
 
         convo.append(
             {
@@ -459,42 +594,13 @@ def run_agent(
         )
 
         for tc in message.tool_calls:
-            name = tc.function.name
-            fn = TOOL_FN_MAP.get(name)
             try:
                 args = json.loads(tc.function.arguments or "{}")
                 if not isinstance(args, dict):
                     args = {}
             except json.JSONDecodeError:
                 args = {}
-
-            if fn is None:
-                result = {"error": f"unknown tool '{name}'"}
-            else:
-                try:
-                    if name in WRITE_TOOLS:
-                        result = fn(db, current_user_id=current_user_id, **args)
-                    else:
-                        result = fn(db, **args)
-                except Exception:
-                    logger.exception("Agent tool %s failed", name)
-                    db.rollback()
-                    result = {"error": f"tool '{name}' failed unexpectedly"}
-
-            if name in WRITE_TOOLS and "error" not in result:
-                if result.get("needs_confirmation"):
-                    pending_confirmation = True
-                else:
-                    actions.append({"tool": name, "args": args, "result": result})
-                    if "rationale" in result:
-                        explanation.append(
-                            {
-                                "tool": name,
-                                "rationale": result["rationale"],
-                                "confidence": result.get("confidence"),
-                            }
-                        )
-
+            result = dispatch(tc.function.name, args)
             convo.append(
                 {
                     "role": "tool",

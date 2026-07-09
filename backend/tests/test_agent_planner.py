@@ -213,6 +213,9 @@ class TestCommitPlan:
         flat = [t for r in resp.json()["requests"] for t in r["tasks"]]
         assert len(flat) == 3
 
-    def test_plan_endpoint_503_when_agent_disabled(self, client):
+    def test_plan_endpoint_503_when_agent_disabled(self, client, monkeypatch):
+        from app.config import settings
+
+        monkeypatch.setattr(settings, "AGENT_ENABLED", False)
         resp = client.post("/agent/plan", json={"brief": "Camera v16 next week: HDR + Night Mode"})
         assert resp.status_code == 503

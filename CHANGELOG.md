@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased] — Agent robustness for small local models
+- `agent_engine.parse_textual_tool_call`: recovers tool calls that small local
+  models (observed with llama3.1:8b) write as **text** instead of using the
+  native tool-calling mechanism — both `{"name": …, "parameters": …}` JSON and
+  bare `tool_name({...})` styles, including string-encoded nested JSON args.
+  Recovered calls run through the same dispatch (audit, confirmation gate,
+  explanation) as native ones. 9 unit tests from live-observed failure strings.
+- System prompt now explicitly forbids narrating tool calls as text/JSON and
+  inventing ids.
+- Test hardening: the planner 503 test now controls `AGENT_ENABLED` via
+  monkeypatch instead of depending on the developer's `.env`.
+
 ## [1.0.0] — 2026-07-08 — Documentation: user guide
 - Added `docs/USER_GUIDE.md` — the complete feature & requirements guide with
   examples: setup + configuration reference, core concepts and scheduling
